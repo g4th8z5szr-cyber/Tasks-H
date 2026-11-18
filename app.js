@@ -91,16 +91,17 @@ function analyzeWords(text) { return words(text).map(variants); }
 
 /* ---------- נתונים ---------- */
 let db = load();
-function blank() { return { tasks: [], routine: [], learn: { dept: {}, type: {} }, v: 1 }; }
+function blank() { return { tasks: [], routine: [], contacts: [], fridges: [], temps: [], learn: { dept: {}, type: {} }, v: 1 }; }
+function fixShape(d) {
+  d.routine = d.routine || []; d.contacts = d.contacts || []; d.fridges = d.fridges || []; d.temps = d.temps || [];
+  d.learn = d.learn || { dept: {}, type: {} }; d.learn.dept = d.learn.dept || {}; d.learn.type = d.learn.type || {};
+  for (const x of d.tasks.concat(d.routine)) if (!x.dept) x.dept = DEFAULT_DEPT;
+  return d;
+}
 function load() {
   try {
     const d = JSON.parse(localStorage.getItem(STORE_KEY));
-    if (d && Array.isArray(d.tasks)) {
-      d.routine = d.routine || []; d.learn = d.learn || { dept: {}, type: {} };
-      d.learn.dept = d.learn.dept || {}; d.learn.type = d.learn.type || {};
-      for (const x of d.tasks.concat(d.routine)) if (!x.dept) x.dept = DEFAULT_DEPT;
-      return d;
-    }
+    if (d && Array.isArray(d.tasks)) return fixShape(d);
   } catch (e) { /* ignore */ }
   return blank();
 }
@@ -277,6 +278,7 @@ function render() {
   // תגים בלשוניות
   $('#b-open').textContent = db.tasks.filter(t => t.status === 'open').length || '';
   $('#b-progress').textContent = db.tasks.filter(t => t.status === 'progress').length || '';
+  { const tb = $('#btnTemps'); if (tb) tb.classList.toggle('dot-on', db.fridges.length > 0 && fridgesToMeasure().length > 0); }
   $('#b-routine').textContent = db.routine.filter(r => routineState(r).days <= 0).length || '';
 
   if (ui.tab === 'cal') { $('#main').innerHTML = calendarHtml(); return; }
@@ -317,7 +319,9 @@ function currentItems(applyFilter) {
 function focusBox() {
   const tasks = db.tasks.filter(t => t.status !== 'closed').map(t => ({ s: urgencyScore(t), txt: t.title, sub: `${t.dept || ''} · ${prioName(t.prio)}${t.status === 'progress' ? ' · בטיפול' : ''}` }));
   const rts = db.routine.filter(r => routineState(r).days <= 0).map(r => ({ s: 22 - routineState(r).days, txt: r.title, sub: `שוטף · ${r.dept || ''} · ${routineState(r).txt}` }));
-  const top = tasks.concat(rts).sort((a, b) => b.s - a.s).slice(0, 3);
+  const miss = fridgesToMeasure();
+  const tm = miss.length && new Date().getHours() >= 9 ? [{ s: 18, txt: `מדידת טמפרטורות – ${miss.length} ${miss.length === 1 ? 'מקרר' : 'מקררים'}`, sub: 'עוד לא נמדדו היום' }] : [];
+  const top = tasks.concat(rts, tm).sort((a, b) => b.s - a.s).slice(0, 3);
   if (!top.length) return '';
   return `<div class="focus"><h3>⚡ מה עכשיו – 3 הדברים הכי חשובים</h3><ol>${top.map(x => `<li>${esc(x.txt)} <span>${esc(x.sub)}</span></li>`).join('')}</ol></div>`;
 }
@@ -349,6 +353,8 @@ function cardHtml(it) {
       <div class="meta">${ui.dept === 'all' && ui.tab === 'closed' && t.dept ? `<span class="tag">${esc(t.dept)}</span>` : ''}
         <span class="tag">${esc(typeName(t.type))}</span>
         ${t.repeats ? `<span class="tag rep">↻ חוזרת ×${t.repeats + 1}</span>` : ''}
+        ${t.photos && t.photos.length ? `<span class="tag">📷 ${t.photos.length}</span>` : ''}
+        ${t.contactId && contactName(t.contactId) ? `<span class="tag">👷 ${esc(contactName(t.contactId))}</span>` : ''}
         ${(() => { const ds = dueState(t); return ds ? `<span class="tag ${ds.cls}">${ds.txt}</span>` : ''; })()}
         <span>${when}</span></div>
       ${t.status === 'closed' && t.treatment ? `<div class="meta">טיפול: ${esc(t.treatment)}</div>` : ''}
@@ -362,6 +368,7 @@ function openSheet(html) {
   $('#sheet').scrollTop = 0;
 }
 function closeSheet() {
+  if (sheetState && sheetState.kind === 'quick' && !sheetState.saved && sheetState.photos) sheetState.photos.forEach(id => photoDel(id));
   $('#sheet').classList.add('hidden'); $('#sheet-bg').classList.add('hidden'); $('#sheet').innerHTML = '';
   sheetState = null;
 }
@@ -452,7 +459,7 @@ function calendarHtml() {
 function quickAdd(prefillDue) {
   if (ui.tab === 'routine') return routineEdit(null);
   if (ui.tab === 'cal' && prefillDue === undefined) prefillDue = ui.calDay;
-  sheetState = { kind: 'quick', manual: {}, dept: ui.dept !== 'all' ? ui.dept : null, type: null, prio: 3, auto: {} };
+  sheetState = { kind: 'quick', manual: {}, dept: ui.dept !== 'all' ? ui.dept : null, type: null, prio: 3, auto: {}, photos: [] };
   if (sheetState.dept) sheetState.manual.dept = true;
   openSheet(`<h2>תקלה / משימה חדשה</h2>
     <input id="q-title" class="field" placeholder="למשל: מקרר בר לא מקרר" autocomplete="off" enterkeyhint="done">
@@ -464,6 +471,7 @@ function quickAdd(prefillDue) {
     <div id="q-more" class="hidden">
       <label>תאריך יעד</label><input id="q-due" type="date" class="field">
     </div>
+    ${photoStrip([])}
     <div class="row"><button class="btn" data-x="cancel">ביטול</button><button class="btn primary" data-x="q-save">שמור</button></div>`);
   quickRefresh();
   if (prefillDue) { $('#q-more').classList.remove('hidden'); document.querySelector('[data-x="q-more"]').classList.add('hidden'); $('#q-due').value = toInputDate(prefillDue); }
@@ -490,7 +498,7 @@ function repeatBox(sim) {
   const n90 = sim.filter(t => t.createdAt > Date.now() - 90 * DAY).length;
   return `<div class="repeat"><b>↻ נראה כמו תקלה חוזרת</b>
     הופיעה ${sim.length} ${sim.length === 1 ? 'פעם' : 'פעמים'} בעבר${n90 ? ` (${n90} ב־90 הימים האחרונים)` : ''}. פעם אחרונה: ${ago(sim[0].createdAt)} – "${esc(sim[0].title)}"
-    ${last ? `<div class="prev"><b>הטיפול בפעם הקודמת (${fmtD.format(last.closedAt)}):</b>${esc(last.treatment)}</div>`
+    ${last ? `<div class="prev"><b>הטיפול בפעם הקודמת (${fmtD.format(last.closedAt)}):</b>${esc(last.treatment)}${last.contactId ? contactLine(last.contactId, '👷 טיפל:') : ''}</div>`
            : '<div class="prev">עדיין לא נרשם טיפול לתקלה הזו.</div>'}
   </div>`;
 }
@@ -500,8 +508,9 @@ function quickSave() {
   const t = {
     id: uid(), title, notes: '', dept: s.dept || DEFAULT_DEPT, type: s.type || 'task', prio: s.prio,
     status: 'open', createdAt: Date.now(), log: [],
-    due: parseDate($('#q-due').value),
+    due: parseDate($('#q-due').value), photos: s.photos.slice(),
   };
+  s.saved = true;
 
   const sim = t.type !== 'task' ? findSimilar(title, t.dept) : [];
   if (sim.length) { t.related = sim.map(x => x.id); t.repeats = sim.length; }
@@ -530,7 +539,10 @@ function taskDetail(id) {
     <label>עדיפות</label>${pickChips('prio', PRIOS, t.prio)}
     <label>📅 תאריך יעד (לא חובה)</label>
     <div class="row mt0"><input id="d-due" type="date" class="field" value="${toInputDate(t.due)}"><button class="btn small" data-x="d-clear-due">ניקוי</button></div>
-    <label>הערות</label><textarea id="d-notes" placeholder="ספק, טלפון של טכנאי, מספר דגם...">${esc(t.notes || '')}</textarea>
+    <label>👷 טכנאי / ספק</label>
+    <div class="row mt0 center">${contactSelect('d-contact', t.contactId)}${(() => { const c = db.contacts.find(x => x.id === t.contactId); return callBtn(c, true); })()}</div>
+    <label>📷 תמונות</label>${photoStrip(t.photos)}
+    <label>הערות</label><textarea id="d-notes" placeholder="מספר דגם, מספר קריאה, פרטים נוספים...">${esc(t.notes || '')}</textarea>
     ${t.status === 'closed' ? `<label>איך טופל</label><textarea id="d-treat">${esc(t.treatment || '')}</textarea>` : ''}
     <div class="row">${actions}</div>
     <label>עדכון מהלך הטיפול</label>
@@ -539,11 +551,13 @@ function taskDetail(id) {
       <div class="h"><small>${fmtDT.format(t.createdAt)}</small>נפתח</div></div>
     ${rel.length ? `<label>היסטוריה של תקלות דומות</label><div class="hist">${rel.map(r => `<div class="h"><small>${fmtD.format(r.createdAt)} · ${r.status === 'closed' ? 'נסגר' : r.status === 'progress' ? 'בטיפול' : 'פתוח'}</small>${esc(r.title)}${r.treatment ? `<br><b>טיפול:</b> ${esc(r.treatment)}` : ''}</div>`).join('')}</div>` : ''}
     <div class="row"><button class="btn danger" data-x="del">מחק</button><button class="btn primary" data-x="d-save">שמור שינויים</button></div>`);
+  fillPhotos($('#sheet'));
 }
 function detailCollect(t) {
   const title = $('#d-title').value.trim(); if (title) t.title = title;
   t.notes = $('#d-notes').value.trim();
   t.due = parseDate($('#d-due').value);
+  if ($('#d-contact')) t.contactId = $('#d-contact').value || null;
   const changedClass = t.dept !== sheetState.dept || t.type !== sheetState.type;
   t.dept = sheetState.dept; t.type = sheetState.type; t.prio = sheetState.prio;
   if ($('#d-treat')) t.treatment = $('#d-treat').value.trim();
@@ -564,6 +578,7 @@ function closeFlow(id) {
   openSheet(`<h2>סגירה: ${esc(t.title)}</h2>
     <label>מה עשית / איך טופל? (יוצג בפעם הבאה שהתקלה תחזור)</label>
     <textarea id="c-treat" placeholder="למשל: הוחלף מאוורר במדחס, טכנאי משה 050-...">${esc(t.treatment || '')}</textarea>
+    <label>👷 מי טיפל? (לא חובה)</label>${contactSelect('c-contact', t.contactId || (prev && prev.contactId) || null)}
     ${prev ? `<button class="btn small mt8" data-x="c-prev">כמו בפעם הקודמת: ${esc(prev.treatment.slice(0, 40))}${prev.treatment.length > 40 ? '…' : ''}</button>` : ''}
     <div class="row"><button class="btn" data-x="cancel">ביטול</button><button class="btn ok" data-x="c-save">סגור משימה</button></div>`);
   sheetState.prev = prev ? prev.treatment : '';
@@ -594,13 +609,19 @@ function routineDone(id) {
 }
 
 /* --- הגדרות וגיבוי --- */
+function fetchDataUrl(u) { // המרת data: URL לקובץ בלי רשת
+  const [h, b64] = u.split(','); const mime = (h.match(/data:([^;]+)/) || [])[1] || 'image/jpeg';
+  const bin = atob(b64); const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return Promise.resolve(new Blob([arr], { type: mime }));
+}
 function settings() {
   sheetState = { kind: 'settings' };
   const n = db.tasks.length, c = db.tasks.filter(t => t.status === 'closed').length;
   openSheet(`<h2>הגדרות וגיבוי</h2>
-    <div class="kv">סה״כ ${n} משימות (${c} סגורות) · ${db.routine.length} טיפולים שוטפים</div>
+    <div class="kv">סה״כ ${n} משימות (${c} סגורות) · ${db.routine.length} טיפולים שוטפים · ${db.contacts.length} אנשי קשר · ${db.fridges.length} מקררים</div>
     <div class="set-sec"><label>גיבוי</label>
-      <p class="note">הנתונים שמורים רק בטלפון הזה. כדאי לייצא גיבוי פעם בשבוע ולשמור אותו ב"קבצים" (אפשר לבחור "On My iPhone").</p>
+      <p class="note">הנתונים שמורים רק בטלפון הזה. כדאי לייצא גיבוי פעם בשבוע ולשמור אותו ב"קבצים" (אפשר לבחור "On My iPhone"). הגיבוי כולל גם את התמונות.</p>
       <div class="row"><button class="btn primary" data-x="export">ייצוא גיבוי</button><button class="btn" data-x="import">שחזור מגיבוי</button></div>
       <input id="imp-file" type="file" accept="application/json,.json" class="hidden">
     </div>
@@ -613,7 +634,14 @@ function settings() {
     <div class="row"><button class="btn" data-x="cancel">סגור</button></div>`);
 }
 async function doExport() {
-  const json = JSON.stringify({ app: 'tk', exportedAt: new Date().toISOString(), ...db }, null, 1);
+  toast('מכין גיבוי...');
+  const photos = {};
+  const ids = new Set(db.tasks.flatMap(t => t.photos || []));
+  for (const id of ids) {
+    const b = await photoGet(id).catch(() => null); if (!b) continue;
+    photos[id] = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(b); });
+  }
+  const json = JSON.stringify({ app: 'tk', exportedAt: new Date().toISOString(), ...db, photos });
   const name = `גיבוי-תקלות-${new Date().toISOString().slice(0, 10)}.json`;
   try {
     const file = new File([json], name, { type: 'application/json' });
@@ -630,13 +658,400 @@ function doImport(file) {
       const d = JSON.parse(fr.result);
       if (!d || !Array.isArray(d.tasks)) throw new Error('bad');
       if (!confirm(`לשחזר ${d.tasks.length} משימות ו־${(d.routine || []).length} טיפולים שוטפים? הנתונים הנוכחיים יוחלפו.`)) return;
-      db = { tasks: d.tasks, routine: d.routine || [], learn: d.learn || { dept: {}, type: {} }, v: 1 };
-      for (const x of db.tasks.concat(db.routine)) if (!x.dept) x.dept = DEFAULT_DEPT;
-      save(); closeSheet(); render(); toast('השחזור הושלם');
+      const photos = d.photos || {};
+      db = fixShape({ tasks: d.tasks, routine: d.routine, contacts: d.contacts, fridges: d.fridges, temps: d.temps, learn: d.learn, v: 1 });
+      save(); closeSheet(); render();
+      Promise.all(Object.entries(photos).map(([id, url]) => fetchDataUrl(url).then(b => photoPut(id, b)).catch(() => {})))
+        .then(() => toast('השחזור הושלם'));
     } catch (e) { toast('הקובץ לא תקין'); }
   };
   fr.readAsText(file);
 }
+
+/* =========================================================
+   תוספות: אנשי קשר, תמונות, טמפרטורות, סיכום חודשי
+   ========================================================= */
+
+/* ---------- תמונות (נשמרות במכשיר ב־IndexedDB) ---------- */
+let photoDb = null;
+function idb() {
+  if (photoDb) return Promise.resolve(photoDb);
+  return new Promise((res, rej) => {
+    const r = indexedDB.open('tk-photos', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('p');
+    r.onsuccess = () => { photoDb = r.result; res(photoDb); };
+    r.onerror = () => rej(r.error);
+  });
+}
+function idbReq(mode, fn) {
+  return idb().then(d => new Promise((res, rej) => {
+    const tx = d.transaction('p', mode); const st = tx.objectStore('p');
+    const r = fn(st); let out;
+    if (r) r.onsuccess = () => { out = r.result; };
+    tx.oncomplete = () => res(out); tx.onerror = () => rej(tx.error);
+  }));
+}
+const photoPut = (id, blob) => idbReq('readwrite', st => st.put(blob, id));
+const photoGet = id => idbReq('readonly', st => st.get(id));
+const photoDel = id => { if (purl[id]) { URL.revokeObjectURL(purl[id]); delete purl[id]; } return idbReq('readwrite', st => st.delete(id)).catch(() => {}); };
+const purl = {};
+async function photoURL(id) {
+  if (purl[id]) return purl[id];
+  const b = await photoGet(id).catch(() => null);
+  if (!b) return null;
+  return (purl[id] = URL.createObjectURL(b));
+}
+async function compressImage(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+    const max = 1280, w = img.naturalWidth, h = img.naturalHeight;
+    const sc = Math.min(1, max / Math.max(w, h));
+    const c = document.createElement('canvas');
+    c.width = Math.round(w * sc); c.height = Math.round(h * sc);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    return await new Promise(res => c.toBlob(res, 'image/jpeg', 0.72));
+  } finally { URL.revokeObjectURL(url); }
+}
+function photoStrip(ids) {
+  return `<div class="photos" id="ph-strip">${(ids || []).map(id => `<div class="ph"><img data-ph="${id}" alt="תמונה"><button class="ph-del" data-phdel="${id}" aria-label="מחיקת תמונה">✕</button></div>`).join('')}
+    <button class="ph-add" data-x="ph-add">📷<span>הוספת תמונה</span></button></div>
+    <input id="ph-input" type="file" accept="image/*" class="hidden">`;
+}
+async function fillPhotos(root) {
+  for (const img of (root || document).querySelectorAll('img[data-ph]')) {
+    const u = await photoURL(img.dataset.ph);
+    if (u) img.src = u; else img.closest('.ph').classList.add('missing');
+  }
+}
+function currentPhotoList() {
+  if (!sheetState) return null;
+  if (sheetState.kind === 'quick') return sheetState.photos;
+  if (sheetState.kind === 'detail') { const t = db.tasks.find(x => x.id === sheetState.id); return t ? (t.photos = t.photos || []) : null; }
+  return null;
+}
+function refreshStrip() {
+  const list = currentPhotoList(); const el = $('#ph-strip'); if (!list || !el) return;
+  const wrap = document.createElement('div'); wrap.innerHTML = photoStrip(list);
+  el.replaceWith(wrap.firstElementChild); fillPhotos($('#ph-strip'));
+}
+async function addPhotoFile(file) {
+  const list = currentPhotoList(); if (!list) return;
+  try {
+    toast('מעבד תמונה...');
+    const blob = await compressImage(file);
+    const id = uid(); await photoPut(id, blob);
+    list.push(id);
+    if (sheetState.kind === 'detail') save();
+    refreshStrip(); toast('התמונה נוספה');
+  } catch (e) { toast('לא הצלחתי לטעון את התמונה'); }
+}
+function showPhoto(id) {
+  const v = document.createElement('div'); v.className = 'viewer';
+  v.innerHTML = '<img alt="תמונה"><span class="viewer-x">✕</span>';
+  photoURL(id).then(u => { if (u) v.querySelector('img').src = u; });
+  v.addEventListener('click', () => v.remove());
+  document.body.appendChild(v);
+}
+
+/* ---------- אנשי קשר: טכנאים וספקים ---------- */
+const ROLES = ['טכנאי קירור', 'טכנאי מזגנים', 'טכנאי מדיחים', 'טכנאי ציוד מטבח', 'אינסטלטור', 'חשמלאי', 'מחשבים וקופות', 'ספק', 'אחר'];
+function telHref(p) { return 'tel:' + String(p || '').replace(/[^\d+]/g, ''); }
+function contactName(id) { const c = db.contacts.find(x => x.id === id); return c ? c.name : ''; }
+function callBtn(c, small) {
+  return c && c.phone ? `<a class="call ${small ? 'small' : ''}" href="${esc(telHref(c.phone))}" aria-label="חיוג ל${esc(c.name)}">📞${small ? '' : ' חיוג'}</a>` : '';
+}
+function contactLine(id, prefix) {
+  const c = db.contacts.find(x => x.id === id); if (!c) return '';
+  return `<div class="c-line">${prefix || '👷'} ${esc(c.name)}${c.role ? ` · ${esc(c.role)}` : ''} ${callBtn(c, true)}</div>`;
+}
+function contactSelect(id, selected) {
+  if (!db.contacts.length) return `<div class="note">אין עדיין אנשי קשר. מוסיפים דרך הכפתור 📇 למעלה.</div>`;
+  const opts = db.contacts.slice().sort((a, b) => a.name.localeCompare(b.name, 'he'))
+    .map(c => `<option value="${c.id}" ${c.id === selected ? 'selected' : ''}>${esc(c.name)}${c.role ? ' – ' + esc(c.role) : ''}</option>`).join('');
+  return `<select id="${id}" class="field"><option value="">— ללא —</option>${opts}</select>`;
+}
+function contactsSheet(q) {
+  sheetState = { kind: 'contacts' };
+  const nq = norm(q || '');
+  const list = db.contacts.filter(c => !nq || norm(`${c.name} ${c.role} ${c.dept} ${c.notes} ${c.phone}`).includes(nq))
+    .sort((a, b) => (a.role || '').localeCompare(b.role || '', 'he') || a.name.localeCompare(b.name, 'he'));
+  openSheet(`<h2>📇 טכנאים וספקים</h2>
+    ${db.contacts.length > 5 ? `<input id="c-search" class="field" type="search" placeholder="חיפוש..." value="${esc(q || '')}">` : ''}
+    <div id="c-list">${list.map(c => {
+      const jobs = db.tasks.filter(t => t.contactId === c.id).length;
+      return `<div class="c-row" data-cedit="${c.id}"><div class="body"><b>${esc(c.name)}</b>
+        <small>${esc(c.role || '')}${c.dept ? ' · ' + esc(c.dept) : ''}${jobs ? ` · ${jobs} טיפולים` : ''}</small></div>${callBtn(c)}</div>`;
+    }).join('') || '<div class="empty small">עוד אין אנשי קשר.<br>הוסיפו טכנאים וספקים כדי לחייג אליהם בלחיצה.</div>'}</div>
+    <div class="row"><button class="btn" data-x="cancel">סגור</button><button class="btn primary" data-x="c-new">+ איש קשר חדש</button></div>`);
+}
+function contactEdit(id) {
+  const c = id ? db.contacts.find(x => x.id === id) : null;
+  sheetState = { kind: 'contact', id, dept: c ? c.dept : null };
+  const jobs = c ? db.tasks.filter(t => t.contactId === c.id).sort((a, b) => b.createdAt - a.createdAt) : [];
+  openSheet(`<h2>${c ? 'איש קשר' : 'איש קשר חדש'}</h2>
+    <label>שם</label><input id="ce-name" class="field" value="${c ? esc(c.name) : ''}" placeholder="למשל: משה קירור" autocomplete="off">
+    <label>טלפון</label><input id="ce-phone" class="field" type="tel" inputmode="tel" value="${c ? esc(c.phone || '') : ''}" placeholder="050-0000000" autocomplete="off">
+    <label>תפקיד</label><input id="ce-role" class="field" value="${c ? esc(c.role || '') : ''}" placeholder="למשל: טכנאי קירור" autocomplete="off">
+    <div class="chips pick-roles">${ROLES.map(r => `<button class="chip" data-role="${esc(r)}">${esc(r)}</button>`).join('')}</div>
+    <label>מחלקה (לא חובה)</label>${pickChips('dept', DEPTS, sheetState.dept)}
+    <label>הערות</label><textarea id="ce-notes" placeholder="שעות פעילות, אחריות על מכשירים, מחירים...">${c ? esc(c.notes || '') : ''}</textarea>
+    ${c && c.phone ? `<div class="row">${callBtn(c)}</div>` : ''}
+    ${jobs.length ? `<label>טיפולים קודמים</label><div class="hist">${jobs.slice(0, 15).map(t => `<div class="h"><small>${fmtD.format(t.createdAt)} · ${esc(t.dept || '')}</small>${esc(t.title)}${t.treatment ? `<br><b>טיפול:</b> ${esc(t.treatment)}` : ''}</div>`).join('')}</div>` : ''}
+    <div class="row">${c ? '<button class="btn danger" data-x="ce-del">מחק</button>' : '<button class="btn" data-x="c-back">ביטול</button>'}<button class="btn primary" data-x="ce-save">שמור</button></div>`);
+  if (!c) $('#ce-name').focus();
+}
+
+/* ---------- טמפרטורות מקררים ---------- */
+const FRIDGE_KINDS = [
+  { v: 'fridge', name: 'מקרר', min: 0, max: 5 },
+  { v: 'freezer', name: 'מקפיא', min: -30, max: -18 },
+  { v: 'other', name: 'אחר', min: 0, max: 8 },
+];
+function lastTemp(fid) {
+  let best = null;
+  for (const r of db.temps) if (r.f === fid && (!best || r.t > best.t)) best = r;
+  return best;
+}
+function tempOk(f, v) { return v >= f.min && v <= f.max; }
+function fridgesToMeasure() {
+  const today = startOfDay(Date.now());
+  return db.fridges.filter(f => { const l = lastTemp(f.id); return !l || l.t < today; });
+}
+function tempsSheet() {
+  sheetState = { kind: 'temps' };
+  const today = startOfDay(Date.now());
+  const missing = fridgesToMeasure().length;
+  const rows = db.fridges.slice().sort((a, b) => DEPTS.indexOf(a.dept) - DEPTS.indexOf(b.dept) || a.name.localeCompare(b.name, 'he')).map(f => {
+    const l = lastTemp(f.id);
+    const bad = l && !tempOk(f, l.v);
+    const status = !l ? '<span class="tag">עוד לא נמדד</span>'
+      : `<span class="tag ${bad ? 'over' : 'okc'}">${bad ? '⚠ ' : '✓ '}${l.v}° · ${l.t >= today ? fmtTime.format(l.t) : ago(l.t)}</span>`;
+    const openFault = bad && !l.taskId ? `<button class="r-btn warnb" data-tfault="${l.id}">פתח תקלה</button>` : '';
+    return `<div class="f-row ${bad ? 'bad' : ''}">
+      <div class="body" data-fhist="${f.id}"><b>${esc(f.name)}</b><small>${esc(f.dept || '')} · טווח ${f.min}° עד ${f.max}°</small><div class="meta">${status}${openFault}</div></div>
+      <input class="field tin" type="number" step="0.1" data-tin="${f.id}" placeholder="°" aria-label="טמפרטורה ${esc(f.name)}">
+    </div>`;
+  }).join('');
+  openSheet(`<h2>🌡️ טמפרטורות</h2>
+    ${db.fridges.length ? `<div class="kv">${missing ? `נשארו ${missing} למדידה היום` : 'כל המקררים נמדדו היום ✓'} · מקפיא: אפשר להקליד בלי מינוס</div>` : ''}
+    ${rows || '<div class="empty small">עוד לא הוגדרו מקררים.<br>הוסיפו מקררים ומקפיאים כדי לרשום טמפרטורות כל יום.</div>'}
+    ${db.fridges.length ? '<button class="btn ok full mt8" data-x="t-save">שמור מדידות</button>' : ''}
+    <div class="row"><button class="btn" data-x="f-new">+ מקרר / מקפיא</button>${db.temps.length ? '<button class="btn" data-x="t-export">ייצוא לביקורת</button>' : ''}</div>
+    <div class="row"><button class="btn" data-x="cancel">סגור</button></div>`);
+}
+function fridgeEdit(id) {
+  const f = id ? db.fridges.find(x => x.id === id) : null;
+  sheetState = { kind: 'fridge', id, dept: f ? f.dept : (ui.dept !== 'all' ? ui.dept : 'מטבח'), fkind: f ? f.kind : 'fridge' };
+  const k = FRIDGE_KINDS.find(x => x.v === sheetState.fkind);
+  openSheet(`<h2>${f ? 'הגדרות מקרר' : 'מקרר / מקפיא חדש'}</h2>
+    <label>שם</label><input id="fe-name" class="field" value="${f ? esc(f.name) : ''}" placeholder="למשל: מקרר בר 1" autocomplete="off">
+    <label>סוג</label><div class="chips pick" data-fkind>${FRIDGE_KINDS.map(x => `<button class="chip ${x.v === sheetState.fkind ? 'on' : ''}" data-fk="${x.v}">${x.name}</button>`).join('')}</div>
+    <label>טווח תקין (°C)</label>
+    <div class="row mt0 center"><span class="note">מ־</span><input id="fe-min" type="number" step="0.5" class="field num" value="${f ? f.min : k.min}"><span class="note">עד</span><input id="fe-max" type="number" step="0.5" class="field num" value="${f ? f.max : k.max}"></div>
+    <label>מחלקה</label>${pickChips('dept', DEPTS, sheetState.dept)}
+    <div class="row">${f ? '<button class="btn danger" data-x="fe-del">מחק</button>' : '<button class="btn" data-x="t-back">ביטול</button>'}<button class="btn primary" data-x="fe-save">שמור</button></div>`);
+  if (!f) $('#fe-name').focus();
+}
+function fridgeHistory(id) {
+  const f = db.fridges.find(x => x.id === id); if (!f) return;
+  sheetState = { kind: 'fhist', id };
+  const list = db.temps.filter(r => r.f === id).sort((a, b) => b.t - a.t);
+  const last30 = list.filter(r => r.t > Date.now() - 30 * DAY);
+  const bad = last30.filter(r => !tempOk(f, r.v)).length;
+  // גרף קטן של 14 המדידות האחרונות
+  const pts = list.slice(0, 14).reverse();
+  let spark = '';
+  if (pts.length > 1) {
+    const vals = pts.map(p => p.v).concat([f.min, f.max]);
+    const lo = Math.min(...vals) - 1, hi = Math.max(...vals) + 1, W = 300, H = 70;
+    const x = i => 8 + i * (W - 16) / (pts.length - 1), y = v => H - 6 - (v - lo) / (hi - lo) * (H - 12);
+    spark = `<svg class="spark" viewBox="0 0 ${W} ${H}" aria-hidden="true">
+      <rect x="0" y="${y(f.max)}" width="${W}" height="${Math.max(1, y(f.min) - y(f.max))}" class="sp-band"/>
+      <polyline points="${pts.map((p, i) => `${x(i)},${y(p.v)}`).join(' ')}" class="sp-line"/>
+      ${pts.map((p, i) => `<circle cx="${x(i)}" cy="${y(p.v)}" r="3.5" class="${tempOk(f, p.v) ? 'sp-ok' : 'sp-bad'}"/>`).join('')}</svg>`;
+  }
+  openSheet(`<h2>${esc(f.name)}</h2>
+    <div class="kv">${esc(f.dept || '')} · טווח ${f.min}° עד ${f.max}° · ב־30 יום: ${last30.length} מדידות${bad ? `, <b class="r-over">${bad} חריגות</b>` : ''}</div>
+    ${spark}
+    <div class="hist">${list.slice(0, 40).map(r => `<div class="h"><small>${fmtDT.format(r.t)}</small><span class="${tempOk(f, r.v) ? '' : 'r-over'}">${r.v}°${tempOk(f, r.v) ? '' : ' ⚠ חריגה'}</span>${r.taskId ? ' · נפתחה תקלה' : ''}</div>`).join('') || '<div class="note">אין מדידות עדיין</div>'}</div>
+    <div class="row"><button class="btn" data-x="t-back">חזרה</button><button class="btn" data-fedit="${f.id}">הגדרות</button></div>`);
+}
+async function exportTemps() {
+  const rows = [['תאריך', 'שעה', 'מקרר', 'מחלקה', 'טמפרטורה', 'טווח תקין', 'תקין']];
+  const ds = new Intl.DateTimeFormat('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  for (const r of db.temps.slice().sort((a, b) => a.t - b.t)) {
+    const f = db.fridges.find(x => x.id === r.f); if (!f) continue;
+    rows.push([ds.format(r.t), fmtTime.format(r.t), f.name, f.dept || '', r.v, `${f.min} עד ${f.max}`, tempOk(f, r.v) ? 'כן' : 'לא']);
+  }
+  const csv = '﻿' + rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+  await shareFile(csv, `טמפרטורות-${toInputDate(Date.now())}.csv`, 'text/csv');
+}
+async function shareFile(content, name, type) {
+  try {
+    const file = new File([content], name, { type });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file] }); return; }
+  } catch (e) { if (e && e.name === 'AbortError') return; }
+  const url = URL.createObjectURL(new Blob([content], { type }));
+  const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+}
+
+/* ---------- סיכום חודשי ---------- */
+function similarPair(a, b) {
+  const ta = sigTokens(a.title), tb = sigTokens(b.title);
+  const { inter, score } = similarity(ta, tb);
+  const sameDept = !a.dept || !b.dept || a.dept === b.dept;
+  return inter >= 1 && ((sameDept && score >= 0.5) || (inter >= 2 && score >= 0.8));
+}
+function statsSheet(offset) {
+  offset = offset || 0;
+  sheetState = { kind: 'stats', offset };
+  const now = new Date();
+  const from = new Date(now.getFullYear(), now.getMonth() + offset, 1).getTime();
+  const to = new Date(now.getFullYear(), now.getMonth() + offset + 1, 1).getTime() - 1;
+  const inM = ts => ts && ts >= from && ts <= to;
+  const opened = db.tasks.filter(t => inM(t.createdAt));
+  const closed = db.tasks.filter(t => t.status === 'closed' && inM(t.closedAt));
+  const faults = opened.filter(t => t.type !== 'task');
+  const durs = closed.map(t => t.closedAt - t.createdAt).filter(d => d >= 0);
+  const avg = durs.length ? durs.reduce((a, b) => a + b, 0) / durs.length : 0;
+  const avgTxt = !durs.length ? '—' : avg < DAY ? `${Math.max(1, Math.round(avg / 3600000))} ש׳` : `${(avg / DAY).toFixed(1)} ימים`;
+
+  const bars = (counts, total) => Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([k, n]) =>
+    `<div class="bar-row"><span class="bl">${esc(k)}</span><span class="bt"><i data-w="${Math.round(n / total * 100)}"></i></span><b>${n}</b></div>`).join('');
+  const byDept = {}, byType = {};
+  for (const t of opened) { byDept[t.dept || DEFAULT_DEPT] = (byDept[t.dept || DEFAULT_DEPT] || 0) + 1; byType[typeName(t.type)] = (byType[typeName(t.type)] || 0) + 1; }
+
+  // מכשירים / תקלות שחוזרות – קיבוץ לפי דמיון
+  const allFaults = db.tasks.filter(t => t.type !== 'task').sort((a, b) => a.createdAt - b.createdAt);
+  const clusters = [];
+  for (const t of allFaults) {
+    const c = clusters.find(c => similarPair(c.rep, t));
+    if (c) c.items.push(t); else clusters.push({ rep: t, items: [t] });
+  }
+  const hot = clusters.map(c => ({ c, m: c.items.filter(t => inM(t.createdAt)).length }))
+    .filter(x => x.m > 0 && x.c.items.length > 1).sort((a, b) => b.m - a.m || b.c.items.length - a.c.items.length).slice(0, 6);
+
+  const routineDoneN = db.routine.reduce((s, r) => s + (r.history || []).filter(h => inM(h.t)).length, 0);
+  const tempsM = db.temps.filter(r => inM(r.t));
+  const tempsBad = tempsM.filter(r => { const f = db.fridges.find(x => x.id === r.f); return f && !tempOk(f, r.v); }).length;
+  const byContact = {};
+  for (const t of db.tasks) if (t.contactId && (inM(t.closedAt) || inM(t.createdAt))) { const n = contactName(t.contactId); if (n) byContact[n] = (byContact[n] || 0) + 1; }
+
+  const monthName = fmtMonth.format(from);
+  openSheet(`<div class="cal-nav stats-nav"><button class="r-btn" data-stats="${offset - 1}" aria-label="חודש קודם">›</button><h2 class="m0">📊 ${monthName}</h2>
+      <button class="r-btn" data-stats="${offset + 1}" ${offset >= 0 ? 'disabled' : ''} aria-label="חודש הבא">‹</button></div>
+    <div class="tiles">
+      <div class="tile"><b>${opened.length}</b><span>נפתחו</span><small>${faults.length} תקלות</small></div>
+      <div class="tile"><b>${closed.length}</b><span>נסגרו</span></div>
+      <div class="tile"><b>${avgTxt}</b><span>זמן טיפול ממוצע</span></div>
+      <div class="tile"><b>${db.tasks.filter(t => t.status !== 'closed').length}</b><span>פתוחות עכשיו</span></div>
+    </div>
+    ${hot.length ? `<label>🔁 תקלות שחוזרות – הכי בעייתי</label><div class="hist">${hot.map(x => `<div class="h"><b>${esc(x.c.items[x.c.items.length - 1].title)}</b><small>${x.m} החודש · ${x.c.items.length} בסך הכול · ${esc(x.c.rep.dept || '')}</small></div>`).join('')}</div>` : ''}
+    ${opened.length ? `<label>לפי מחלקה</label>${bars(byDept, opened.length)}<label>לפי סוג</label>${bars(byType, opened.length)}` : '<div class="empty small">לא נפתחו משימות בחודש הזה</div>'}
+    ${Object.keys(byContact).length ? `<label>👷 טכנאים וספקים שטיפלו</label>${bars(byContact, Math.max(...Object.values(byContact)))}` : ''}
+    <label>טיפול שוטף וטמפרטורות</label>
+    <div class="kv">↻ ${routineDoneN} טיפולים שוטפים בוצעו${db.routine.length ? ` · ${db.routine.filter(r => routineState(r).days < 0).length} באיחור כרגע` : ''}<br>
+      🌡️ ${tempsM.length} מדידות${tempsBad ? ` · <b class="r-over">${tempsBad} חריגות</b>` : tempsM.length ? ' · הכול תקין ✓' : ''}</div>
+    <div class="row"><button class="btn" data-x="cancel">סגור</button></div>`);
+  document.querySelectorAll('#sheet [data-w]').forEach(i => { i.style.width = Math.max(3, Number(i.dataset.w)) + '%'; });
+}
+
+/* ---------- אירועים של התוספות ---------- */
+document.addEventListener('click', e => {
+  if (e.target.closest('a.call')) return; // חיוג – לא לפתוח עריכה
+  const el = e.target.closest('button, [data-ph], [data-cedit], [data-fhist]'); if (!el) return;
+  const d = el.dataset;
+  if (el.id === 'btnContacts') return contactsSheet();
+  if (el.id === 'btnTemps') return tempsSheet();
+  if (el.id === 'btnStats') return statsSheet(0);
+  if (d.ph) return showPhoto(d.ph);
+  if (d.phdel) {
+    const list = currentPhotoList(); if (!list) return;
+    if (!confirm('למחוק את התמונה?')) return;
+    const i = list.indexOf(d.phdel); if (i >= 0) list.splice(i, 1);
+    photoDel(d.phdel); if (sheetState.kind === 'detail') save(); refreshStrip(); return;
+  }
+  if (d.cedit) return contactEdit(d.cedit);
+  if (d.role) { $('#ce-role').value = d.role; return; }
+  if (d.fhist) return fridgeHistory(d.fhist);
+  if (d.fedit) return fridgeEdit(d.fedit);
+  if (d.fk) {
+    sheetState.fkind = d.fk; const k = FRIDGE_KINDS.find(x => x.v === d.fk);
+    el.parentNode.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c === el));
+    $('#fe-min').value = k.min; $('#fe-max').value = k.max; return;
+  }
+  if (d.stats !== undefined) { if (!el.disabled) statsSheet(Number(d.stats)); return; }
+  if (d.tfault) {
+    const r = db.temps.find(x => x.id === d.tfault); const f = r && db.fridges.find(x => x.id === r.f); if (!f) return;
+    const t = { id: uid(), title: `${f.name} – טמפרטורה ${r.v}° (מחוץ לטווח)`, notes: `טווח תקין: ${f.min}° עד ${f.max}°. נמדד ${fmtDT.format(r.t)}.`,
+      dept: f.dept || DEFAULT_DEPT, type: 'equip', prio: 2, status: 'open', createdAt: Date.now(), log: [] };
+    const sim = findSimilar(t.title, t.dept); if (sim.length) { t.related = sim.map(x => x.id); t.repeats = sim.length; }
+    db.tasks.push(t); r.taskId = t.id; save(); render(); tempsSheet(); toast('נפתחה תקלה ברשימת הפתוחות'); return;
+  }
+
+  switch (d.x) {
+    case 'ph-add': return $('#ph-input').click();
+    case 'c-new': return contactEdit(null);
+    case 'c-back': return contactsSheet();
+    case 'ce-save': {
+      const name = $('#ce-name').value.trim(); if (!name) return $('#ce-name').focus();
+      const data = { name, phone: $('#ce-phone').value.trim(), role: $('#ce-role').value.trim(), dept: sheetState.dept || null, notes: $('#ce-notes').value.trim() };
+      if (sheetState.id) Object.assign(db.contacts.find(x => x.id === sheetState.id), data);
+      else db.contacts.push({ id: uid(), createdAt: Date.now(), ...data });
+      save(); toast('נשמר'); return contactsSheet();
+    }
+    case 'ce-del':
+      if (!confirm('למחוק את איש הקשר?')) return;
+      db.contacts = db.contacts.filter(x => x.id !== sheetState.id);
+      for (const t of db.tasks) if (t.contactId === sheetState.id) t.contactId = null;
+      save(); return contactsSheet();
+    case 'f-new': return fridgeEdit(null);
+    case 't-back': return tempsSheet();
+    case 'fe-save': {
+      const name = $('#fe-name').value.trim(); if (!name) return $('#fe-name').focus();
+      let min = Number($('#fe-min').value), max = Number($('#fe-max').value);
+      if (isNaN(min) || isNaN(max)) return toast('טווח לא תקין');
+      if (min > max) [min, max] = [max, min];
+      const data = { name, kind: sheetState.fkind, min, max, dept: sheetState.dept || DEFAULT_DEPT };
+      if (sheetState.id) Object.assign(db.fridges.find(x => x.id === sheetState.id), data);
+      else db.fridges.push({ id: uid(), ...data });
+      save(); render(); return tempsSheet();
+    }
+    case 'fe-del':
+      if (!confirm('למחוק את המקרר ואת כל המדידות שלו?')) return;
+      db.fridges = db.fridges.filter(x => x.id !== sheetState.id);
+      db.temps = db.temps.filter(x => x.f !== sheetState.id);
+      save(); render(); return tempsSheet();
+    case 't-save': {
+      let n = 0, bad = 0; const now = Date.now();
+      for (const inp of document.querySelectorAll('[data-tin]')) {
+        if (inp.value.trim() === '') continue;
+        let v = Number(inp.value.replace(',', '.')); if (isNaN(v)) continue;
+        const f = db.fridges.find(x => x.id === inp.dataset.tin); if (!f) continue;
+        if (f.kind === 'freezer' && v > 0) v = -v;
+        v = Math.round(v * 10) / 10;
+        db.temps.push({ id: uid(), f: f.id, t: now, v }); n++;
+        if (!tempOk(f, v)) bad++;
+      }
+      if (!n) return toast('לא הוקלדו מדידות');
+      save(); render(); tempsSheet();
+      return toast(bad ? `נשמרו ${n} מדידות · ⚠ ${bad} חריגות` : `נשמרו ${n} מדידות ✓`);
+    }
+    case 't-export': return exportTemps();
+  }
+});
+document.addEventListener('change', e => {
+  if (e.target.id === 'ph-input' && e.target.files[0]) { addPhotoFile(e.target.files[0]); e.target.value = ''; }
+});
+document.addEventListener('input', e => {
+  if (e.target.id === 'c-search') {
+    const q = e.target.value; contactsSheet(q);
+    const s = $('#c-search'); if (s) { s.focus(); s.setSelectionRange(q.length, q.length); }
+  }
+});
 
 /* ---------- אירועים ---------- */
 document.addEventListener('click', e => {
@@ -692,11 +1107,12 @@ document.addEventListener('click', e => {
       detailCollect(t); addLog(t, v); save(); taskDetail(t.id); return;
     }
     case 'del':
-      if (confirm('למחוק את המשימה?')) { db.tasks = db.tasks.filter(y => y.id !== t.id); save(); closeSheet(); render(); }
+      if (confirm('למחוק את המשימה?')) { (t.photos || []).forEach(id => photoDel(id)); db.tasks = db.tasks.filter(y => y.id !== t.id); save(); closeSheet(); render(); }
       return;
     case 'c-prev': $('#c-treat').value = s.prev; return;
     case 'c-save': {
       const tr = $('#c-treat').value.trim();
+      if ($('#c-contact')) t.contactId = $('#c-contact').value || null;
       t.treatment = tr; t.status = 'closed'; t.closedAt = Date.now(); addLog(t, 'נסגר' + (tr ? ': ' + tr : ''));
       save(); closeSheet(); render(); return toast('נסגר ✓');
     }
@@ -719,7 +1135,7 @@ document.addEventListener('click', e => {
     case 'import': return $('#imp-file').click();
     case 'wipe':
       if (confirm('למחוק את כל הנתונים לצמיתות? מומלץ לייצא גיבוי לפני.') && confirm('בטוח? אין דרך לשחזר בלי גיבוי.')) {
-        db = blank(); save(); closeSheet(); render(); toast('הכול נמחק');
+        db = blank(); save(); idbReq('readwrite', st => st.clear()).catch(() => {}); closeSheet(); render(); toast('הכול נמחק');
       }
       return;
   }

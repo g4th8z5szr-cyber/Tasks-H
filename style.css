@@ -162,3 +162,62 @@ main { padding: 10px 12px; }
 .cal-legend { display: flex; justify-content: center; gap: 12px; font-size: 12px; color: var(--muted); margin-top: 8px; flex-wrap: wrap; }
 .cal-legend span { display: inline-flex; align-items: center; gap: 4px; }
 .empty.small { padding: 18px; }
+
+/* כותרת עם כפתורים */
+.top-actions { display: flex; gap: 0; }
+.top-actions .icon-btn { font-size: 20px; width: 38px; position: relative; }
+.icon-btn.dot-on::after { content: ''; position: absolute; top: 6px; right: 5px; width: 8px; height: 8px; border-radius: 50%; background: var(--p1); }
+h2.m0 { margin: 0; }
+.full { width: 100%; flex: none; }
+
+/* תמונות */
+.photos { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.ph { position: relative; width: 76px; height: 76px; border-radius: 12px; overflow: hidden; background: var(--chip); }
+.ph img { width: 100%; height: 100%; object-fit: cover; display: block; cursor: zoom-in; }
+.ph.missing::after { content: 'חסר'; position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; color: var(--muted); }
+.ph-del { position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: rgba(0,0,0,.55); color: #fff; font-size: 11px; }
+.ph-add { width: 76px; height: 76px; border-radius: 12px; border: 1.5px dashed var(--line); color: var(--muted); display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 22px; gap: 2px; }
+.ph-add span { font-size: 11px; }
+.viewer { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.92); display: grid; place-items: center; padding: env(safe-area-inset-top) 10px env(safe-area-inset-bottom); }
+.viewer img { max-width: 100%; max-height: 90vh; border-radius: 8px; }
+.viewer-x { position: absolute; top: calc(env(safe-area-inset-top) + 14px); left: 16px; color: #fff; font-size: 22px; }
+
+/* אנשי קשר */
+.c-row, .f-row { display: flex; align-items: center; gap: 10px; padding: 11px 2px; border-bottom: 1px solid var(--line); }
+.c-row { cursor: pointer; }
+.c-row .body, .f-row .body { flex: 1; min-width: 0; }
+.c-row b, .f-row b { display: block; font-weight: 600; }
+.c-row small, .f-row small { color: var(--muted); font-size: 13px; }
+.call { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 8px 12px; border-radius: 10px; background: var(--ok); color: #fff; font-weight: 700; font-size: 14px; text-decoration: none; }
+.call.small { padding: 6px 9px; font-size: 13px; }
+.c-line { margin-top: 6px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pick-roles { margin-top: 8px; }
+.pick-roles .chip { font-size: 13px; padding: 5px 10px; }
+select.field { -webkit-appearance: none; appearance: none; flex: 1; min-width: 0; }
+
+/* טמפרטורות */
+.f-row .body { cursor: pointer; }
+.f-row.bad b { color: var(--p1); }
+.f-row .meta { margin-top: 4px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.tin { width: 74px; flex: none; text-align: center; font-weight: 700; padding: 10px 6px; }
+.tag.okc { background: #e3f6e9; color: #15803d; }
+@media (prefers-color-scheme: dark) { .tag.okc { background: #12301d; color: #6ee79b; } }
+.r-btn.warnb { background: var(--p1); color: #fff; border-color: var(--p1); padding: 4px 9px; font-size: 12px; }
+.spark { width: 100%; height: 80px; margin: 8px 0 4px; }
+.sp-band { fill: color-mix(in srgb, var(--ok) 14%, transparent); }
+.sp-line { fill: none; stroke: var(--accent); stroke-width: 2; }
+.sp-ok { fill: var(--accent); } .sp-bad { fill: var(--p1); }
+
+/* סיכום */
+.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.tile { background: var(--bg); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 2px; }
+.tile b { font-size: 24px; font-weight: 800; }
+.tile span { font-size: 13px; color: var(--muted); font-weight: 600; }
+.tile small { font-size: 12px; color: var(--muted); }
+.bar-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 14px; }
+.bar-row .bl { width: 96px; flex: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-row .bt { flex: 1; height: 10px; background: var(--chip); border-radius: 5px; overflow: hidden; }
+.bar-row .bt i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 5px; }
+.bar-row b { width: 26px; text-align: left; flex: none; }
+.r-btn[disabled] { opacity: .3; }
+.stats-nav { margin-inline-end: 44px; margin-top: 2px; }
