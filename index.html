@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'none'; form-action 'none'; base-uri 'none'; object-src 'none'; frame-src 'none'; worker-src 'self'; manifest-src 'self'">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="תקלות">
+<meta name="theme-color" content="#14171c">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-180.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="style.css">
+<title>תקלות ומשימות</title>
+</head>
+<body>
+<header class="top">
+  <div class="top-row">
+    <h1 id="title">משימות פתוחות</h1>
+    <button id="btnSettings" class="icon-btn" aria-label="הגדרות">⚙︎</button>
+  </div>
+  <div id="search-wrap" class="search-wrap hidden">
+    <input id="search" type="search" placeholder="חיפוש..." autocomplete="off">
+  </div>
+  <nav id="depts" class="chips scroll"></nav>
+</header>
+
+<main id="main"></main>
+
+<button id="fab" class="fab" aria-label="הוספה מהירה">+</button>
+
+<nav class="tabs">
+  <button data-tab="open" class="active"><span class="tab-ic">●</span><span>פתוחות</span><b class="badge" id="b-open"></b></button>
+  <button data-tab="progress"><span class="tab-ic">◐</span><span>בטיפול</span><b class="badge" id="b-progress"></b></button>
+  <button data-tab="closed"><span class="tab-ic">✓</span><span>סגורות</span></button>
+  <button data-tab="routine"><span class="tab-ic">↻</span><span>שוטף</span><b class="badge" id="b-routine"></b></button>
+</nav>
+
+<div id="sheet-bg" class="sheet-bg hidden"></div>
+<section id="sheet" class="sheet hidden" role="dialog" aria-modal="true"></section>
+<div id="toast" class="toast hidden"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
