@@ -121,3 +121,22 @@ main { padding: 10px 12px; }
 .set-sec { border-top: 1px solid var(--line); padding-top: 6px; margin-top: 14px; }
 .note { font-size: 13px; color: var(--muted); line-height: 1.6; }
 .mt8 { margin-top: 8px; } .mt0 { margin-top: 0; } .center { align-items: center; } .field.num { width: 90px; flex: none; }
+
+/* תאריך יעד ותזכורות */
+.tag.over { background: #fde7e7; color: #b91c1c; font-weight: 700; }
+.tag.today { background: #fff1d6; color: #9a5b00; font-weight: 700; }
+@media (prefers-color-scheme: dark) { .tag.over { background: #3a1d1f; color: #ff9a9a; } .tag.today { background: #33270f; color: #ffcf7a; } }
+.remind { background: #fff7e6; border: 1px solid #fcd9a8; border-radius: 16px; padding: 10px 12px; margin-bottom: 10px; }
+@media (prefers-color-scheme: dark) { .remind { background: #2c2112; border-color: #4d3818; } }
+.remind h3 { margin: 0 0 6px; font-size: 15px; display: flex; gap: 6px; align-items: center; }
+.remind h3 span { background: var(--p2); color: #fff; border-radius: 9px; font-size: 12px; padding: 0 7px; line-height: 18px; }
+.r-item { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px dashed #f3c98a; cursor: pointer; }
+.r-item:first-of-type { border-top: 0; }
+.r-item .body { flex: 1; min-width: 0; }
+.r-item b { display: block; font-weight: 600; word-break: break-word; }
+.r-item small { color: var(--muted); font-size: 12px; }
+.r-btn { flex: none; padding: 7px 10px; border-radius: 10px; background: var(--card); font-size: 13px; font-weight: 600; border: 1px solid var(--line); }
+.r-btn.ok { background: var(--ok); color: #fff; border-color: var(--ok); }
+.link-btn { display: block; margin-top: 14px; color: var(--accent); font-weight: 600; font-size: 15px; padding: 6px 0; }
+.btn.gcal { background: var(--card); border: 1px solid var(--line); color: var(--accent); width: 100%; }
+.row .field { min-width: 0; }

@@ -5,7 +5,8 @@
    ========================================================= */
 
 /* ---------- הגדרות שקל לשנות ---------- */
-const DEPTS = ['פלור', 'מטבח', 'בר', 'הכנות', 'קצביה', 'משרד', 'לילינבלום'];
+const DEPTS = ['פלור', 'מטבח', 'בר', 'הכנות', 'קצביה', 'משרד', 'לילינבלום', 'כללי'];
+const DEFAULT_DEPT = 'כללי'; // לאן הולך כל מה שלא זוהתה לו מחלקה
 
 const TYPES = [
   { id: 'equip', name: 'מכשור' },
@@ -31,6 +32,7 @@ const DEPT_KW = {
   'קצביה': ['קצביה', 'קצב', 'בשר', 'מטחנה', 'מסור', 'יישון', 'נקניק', 'נקניקים', 'פירוק'],
   'משרד': ['משרד', 'מחשב', 'מדפסת', 'אינטרנט', 'ראוטר', 'וויפי', 'wifi', 'חשבונית', 'חשבוניות', 'שכר', 'משמרות', 'סידור עבודה', 'הנהלת חשבונות'],
   'לילינבלום': ['לילינבלום'],
+  'כללי': ['כללי'],
 };
 
 const TYPE_KW = {
@@ -96,6 +98,7 @@ function load() {
     if (d && Array.isArray(d.tasks)) {
       d.routine = d.routine || []; d.learn = d.learn || { dept: {}, type: {} };
       d.learn.dept = d.learn.dept || {}; d.learn.type = d.learn.type || {};
+      for (const x of d.tasks.concat(d.routine)) if (!x.dept) x.dept = DEFAULT_DEPT;
       return d;
     }
   } catch (e) { /* ignore */ }
@@ -201,6 +204,48 @@ function ago(ts) {
   if (d <= 0) return 'היום'; if (d === 1) return 'אתמול'; if (d < 30) return `לפני ${d} ימים`;
   return fmtD.format(ts);
 }
+const p2 = n => String(n).padStart(2, '0');
+function toInputDate(ts) { if (!ts) return ''; const d = new Date(ts); return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`; }
+function toInputDT(ts) { if (!ts) return ''; const d = new Date(ts); return `${toInputDate(ts)}T${p2(d.getHours())}:${p2(d.getMinutes())}`; }
+function parseDate(v) { if (!v) return null; const t = new Date(v + 'T18:00').getTime(); return isNaN(t) ? null : t; }
+function parseDT(v) { if (!v) return null; const t = new Date(v).getTime(); return isNaN(t) ? null : Math.floor(t / 60000) * 60000; }
+const sameMinute = (a, b) => Math.floor((a || 0) / 60000) === Math.floor((b || 0) / 60000);
+const fmtTime = new Intl.DateTimeFormat('he-IL', { hour: '2-digit', minute: '2-digit' });
+function whenTxt(ts) { // "היום 09:00" / "מחר 09:00" / "20.11 09:00"
+  const d = Math.round((startOfDay(ts) - startOfDay(Date.now())) / DAY);
+  const day = d === 0 ? 'היום' : d === 1 ? 'מחר' : d === -1 ? 'אתמול' : new Intl.DateTimeFormat('he-IL', { day: 'numeric', month: 'numeric' }).format(ts);
+  return `${day} ${fmtTime.format(ts)}`;
+}
+function dueState(t) {
+  if (!t.due) return null;
+  const d = Math.round((startOfDay(t.due) - startOfDay(Date.now())) / DAY);
+  if (t.status === 'closed') return { cls: '', txt: `יעד ${fmtD.format(t.due)}` };
+  if (d < 0) return { cls: 'over', txt: `⚠ יעד עבר: ${fmtD.format(t.due)}` };
+  if (d === 0) return { cls: 'today', txt: 'יעד: היום' };
+  if (d === 1) return { cls: '', txt: 'יעד: מחר' };
+  return { cls: '', txt: `יעד: ${fmtD.format(t.due)}` };
+}
+function dueReminders() {
+  const now = Date.now();
+  return db.tasks.filter(t => t.remindAt && !t.remindDone && t.status !== 'closed' && t.remindAt <= now)
+    .sort((a, b) => a.remindAt - b.remindAt);
+}
+/* קישור "הוספה ליומן Google" – נפתח רק בלחיצה שלך, ושולח לגוגל רק את הכותרת, הזמן והפרטים של המשימה הזו */
+function gcalUrl(t) {
+  const f = ts => new Date(ts).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  let dates;
+  if (t.remindAt) dates = `${f(t.remindAt)}/${f(t.remindAt + 15 * 60000)}`;
+  else { const d = new Date(t.due), e = new Date(t.due + DAY); const g = x => `${x.getFullYear()}${p2(x.getMonth() + 1)}${p2(x.getDate())}`; dates = `${g(d)}/${g(e)}`; }
+  const details = [t.dept && `מחלקה: ${t.dept}`, `סוג: ${typeName(t.type)}`, `עדיפות: ${prioName(t.prio)}`,
+    t.due && `תאריך יעד: ${fmtD.format(t.due)}`, t.notes && `הערות: ${t.notes}`].filter(Boolean).join('\n');
+  return 'https://calendar.google.com/calendar/render?action=TEMPLATE'
+    + '&text=' + encodeURIComponent('🔔 ' + t.title) + '&dates=' + dates + '&details=' + encodeURIComponent(details);
+}
+function openGcal(t) {
+  if (!t.remindAt && !t.due) { toast('קודם בחרו תזכורת או תאריך יעד'); return false; }
+  window.open(gcalUrl(t), '_blank', 'noopener,noreferrer');
+  return true;
+}
 function startOfDay(ts) { const d = new Date(ts); d.setHours(0, 0, 0, 0); return d.getTime(); }
 function typeName(id) { const t = TYPES.find(x => x.id === id); return t ? t.name : ''; }
 function prioName(v) { const p = PRIOS.find(x => x.v === v); return p ? p.name : ''; }
@@ -257,6 +302,7 @@ function render() {
 
   const list = currentItems(true);
   let html = '';
+  if (ui.tab !== 'routine') html += remindStrip();
   if (ui.tab === 'open' && ui.dept === 'all') html += focusBox();
   if (!list.length) html += emptyMsg();
   else if (ui.dept === 'all' && ui.tab !== 'closed') {
@@ -286,6 +332,13 @@ function currentItems(applyFilter) {
   }
   if (applyFilter && ui.dept !== 'all') list = list.filter(x => x.dept === ui.dept);
   return list;
+}
+function remindStrip() {
+  const list = dueReminders();
+  if (!list.length) return '';
+  return `<div class="remind"><h3>🔔 תזכורות <span>${list.length}</span></h3>${list.map(t => `
+    <div class="r-item" data-open="${t.id}"><div class="body"><b>${esc(t.title)}</b><small>${whenTxt(t.remindAt)} · ${esc(t.dept || '')}</small></div>
+      <button class="r-btn" data-snooze="${t.id}">עוד שעה</button><button class="r-btn ok" data-rdone="${t.id}" aria-label="סיום תזכורת">✓</button></div>`).join('')}</div>`;
 }
 function focusBox() {
   const tasks = db.tasks.filter(t => t.status !== 'closed').map(t => ({ s: urgencyScore(t), txt: t.title, sub: `${t.dept || ''} · ${prioName(t.prio)}${t.status === 'progress' ? ' · בטיפול' : ''}` }));
@@ -322,7 +375,8 @@ function cardHtml(it) {
       <div class="meta">${ui.dept === 'all' && ui.tab === 'closed' && t.dept ? `<span class="tag">${esc(t.dept)}</span>` : ''}
         <span class="tag">${esc(typeName(t.type))}</span>
         ${t.repeats ? `<span class="tag rep">↻ חוזרת ×${t.repeats + 1}</span>` : ''}
-        ${t.due ? `<span class="tag">עד ${fmtD.format(t.due)}</span>` : ''}
+        ${(() => { const ds = dueState(t); return ds ? `<span class="tag ${ds.cls}">${ds.txt}</span>` : ''; })()}
+        ${t.remindAt && !t.remindDone && t.status !== 'closed' ? `<span class="tag ${t.remindAt <= Date.now() ? 'today' : ''}">🔔 ${whenTxt(t.remindAt)}</span>` : ''}
         <span>${when}</span></div>
       ${t.status === 'closed' && t.treatment ? `<div class="meta">טיפול: ${esc(t.treatment)}</div>` : ''}
     </div>${act}</div>`;
@@ -360,6 +414,12 @@ function quickAdd() {
     <label>מחלקה</label><div id="q-dept"></div>
     <label>סוג</label><div id="q-type"></div>
     <label>עדיפות</label><div id="q-prio"></div>
+    <button class="link-btn" data-x="q-more">📅 תאריך יעד · 🔔 תזכורת <span class="note">(לא חובה)</span></button>
+    <div id="q-more" class="hidden">
+      <label>תאריך יעד</label><input id="q-due" type="date" class="field">
+      <label>תזכורת (תופיע באפליקציה בזמן שבחרת)</label><input id="q-rem" type="datetime-local" class="field">
+      <button class="btn gcal mt8" data-x="q-save-gcal">שמור והוסף ליומן Google</button>
+    </div>
     <div class="row"><button class="btn" data-x="cancel">ביטול</button><button class="btn primary" data-x="q-save">שמור</button></div>`);
   quickRefresh();
   const inp = $('#q-title'); inp.focus();
@@ -368,7 +428,7 @@ function quickRefresh() {
   const s = sheetState, text = $('#q-title') ? $('#q-title').value : '';
   const g = guess(text);
   s.auto = g;
-  if (!s.manual.dept && g.dept) s.dept = g.dept;
+  if (!s.manual.dept) s.dept = g.dept || DEFAULT_DEPT;
   if (!s.manual.type) s.type = g.type || (text.trim() ? 'task' : null);
   if (!s.manual.prio) s.prio = g.prio;
   const sim = text.trim().length > 2 && s.type !== 'task' ? findSimilar(text, s.dept) : [];
@@ -389,13 +449,16 @@ function repeatBox(sim) {
            : '<div class="prev">עדיין לא נרשם טיפול לתקלה הזו.</div>'}
   </div>`;
 }
-function quickSave() {
+function quickSave(withGcal) {
   const s = sheetState, title = $('#q-title').value.trim();
   if (!title) { $('#q-title').focus(); return; }
   const t = {
-    id: uid(), title, notes: '', dept: s.dept, type: s.type || 'task', prio: s.prio,
+    id: uid(), title, notes: '', dept: s.dept || DEFAULT_DEPT, type: s.type || 'task', prio: s.prio,
     status: 'open', createdAt: Date.now(), log: [],
+    due: parseDate($('#q-due').value), remindAt: parseDT($('#q-rem').value), remindDone: false,
   };
+  if (withGcal && !t.remindAt && !t.due) { toast('קודם בחרו תזכורת או תאריך יעד'); return; }
+  if (withGcal) openGcal(t);
   const sim = t.type !== 'task' ? findSimilar(title, t.dept) : [];
   if (sim.length) { t.related = sim.map(x => x.id); t.repeats = sim.length; }
   db.tasks.push(t);
@@ -421,8 +484,11 @@ function taskDetail(id) {
     <label>מחלקה</label>${pickChips('dept', DEPTS, t.dept)}
     <label>סוג</label>${pickChips('type', TYPES, t.type)}
     <label>עדיפות</label>${pickChips('prio', PRIOS, t.prio)}
-    <label>תאריך יעד (לא חובה)</label>
-    <input id="d-due" type="date" class="field" value="${t.due ? new Date(t.due - new Date(t.due).getTimezoneOffset() * 60000).toISOString().slice(0, 10) : ''}">
+    <label>📅 תאריך יעד (לא חובה)</label>
+    <div class="row mt0"><input id="d-due" type="date" class="field" value="${toInputDate(t.due)}"><button class="btn small" data-x="d-clear-due">ניקוי</button></div>
+    <label>🔔 תזכורת (לא חובה)${t.remindDone && t.remindAt ? ' – כבר הוצגה' : ''}</label>
+    <div class="row mt0"><input id="d-rem" type="datetime-local" class="field" value="${toInputDT(t.remindAt)}"><button class="btn small" data-x="d-clear-rem">ניקוי</button></div>
+    <button class="btn gcal mt8 full" data-x="d-gcal">📅 הוספה ליומן Google</button>
     <label>הערות</label><textarea id="d-notes" placeholder="ספק, טלפון של טכנאי, מספר דגם...">${esc(t.notes || '')}</textarea>
     ${t.status === 'closed' ? `<label>איך טופל</label><textarea id="d-treat">${esc(t.treatment || '')}</textarea>` : ''}
     <div class="row">${actions}</div>
@@ -436,7 +502,9 @@ function taskDetail(id) {
 function detailCollect(t) {
   const title = $('#d-title').value.trim(); if (title) t.title = title;
   t.notes = $('#d-notes').value.trim();
-  const due = $('#d-due').value; t.due = due ? new Date(due + 'T18:00').getTime() : null;
+  t.due = parseDate($('#d-due').value);
+  const rem = parseDT($('#d-rem').value);
+  if (!sameMinute(rem, t.remindAt)) { t.remindAt = rem; t.remindDone = false; }
   const changedClass = t.dept !== sheetState.dept || t.type !== sheetState.type;
   t.dept = sheetState.dept; t.type = sheetState.type; t.prio = sheetState.prio;
   if ($('#d-treat')) t.treatment = $('#d-treat').value.trim();
@@ -466,7 +534,7 @@ function closeFlow(id) {
 /* --- טיפול שוטף --- */
 function routineEdit(id) {
   const r = id ? db.routine.find(x => x.id === id) : null;
-  sheetState = { kind: 'routine', id, dept: r ? r.dept : (ui.dept !== 'all' ? ui.dept : null), every: r ? r.every : 7 };
+  sheetState = { kind: 'routine', id, dept: r ? r.dept : (ui.dept !== 'all' ? ui.dept : DEFAULT_DEPT), every: r ? r.every : 7 };
   const presets = [{ v: 1, name: 'כל יום' }, { v: 7, name: 'שבועי' }, { v: 14, name: 'דו־שבועי' }, { v: 30, name: 'חודשי' }, { v: 90, name: 'רבעוני' }, { v: 180, name: 'חצי שנתי' }];
   openSheet(`<h2>${r ? 'טיפול שוטף' : 'טיפול שוטף חדש'}</h2>
     <input id="r-title" class="field" placeholder="למשל: ניקוי מסנני מנדף" value="${r ? esc(r.title) : ''}" autocomplete="off">
@@ -498,7 +566,7 @@ function settings() {
       <input id="imp-file" type="file" accept="application/json,.json" class="hidden">
     </div>
     <div class="set-sec"><label>פרטיות ואבטחה</label>
-      <p class="note">🔒 האפליקציה חסומה לגישה לאינטרנט (Content-Security-Policy: connect-src 'none'), אין בה התחברות, אין חשבון, ואין שדות לפרטים אישיים או תשלום. שום נתון לא נשלח לשום מקום.</p>
+      <p class="note">🔒 האפליקציה חסומה לגישה לאינטרנט (Content-Security-Policy: connect-src 'none'), אין בה התחברות, אין חשבון, ואין שדות לפרטים אישיים או תשלום. שום נתון לא נשלח לשום מקום.<br>היוצא מן הכלל היחיד: כשאתם לוחצים "הוספה ליומן Google", נפתח דף של Google עם הכותרת, הזמן והפרטים של המשימה הזו בלבד.</p>
     </div>
     <div class="set-sec"><label>אזור מסוכן</label>
       <div class="row"><button class="btn danger" data-x="wipe">מחק את כל הנתונים</button></div>
@@ -524,6 +592,7 @@ function doImport(file) {
       if (!d || !Array.isArray(d.tasks)) throw new Error('bad');
       if (!confirm(`לשחזר ${d.tasks.length} משימות ו־${(d.routine || []).length} טיפולים שוטפים? הנתונים הנוכחיים יוחלפו.`)) return;
       db = { tasks: d.tasks, routine: d.routine || [], learn: d.learn || { dept: {}, type: {} }, v: 1 };
+      for (const x of db.tasks.concat(db.routine)) if (!x.dept) x.dept = DEFAULT_DEPT;
       save(); closeSheet(); render(); toast('השחזור הושלם');
     } catch (e) { toast('הקובץ לא תקין'); }
   };
@@ -532,7 +601,7 @@ function doImport(file) {
 
 /* ---------- אירועים ---------- */
 document.addEventListener('click', e => {
-  const el = e.target.closest('button, .card, #sheet-bg'); if (!el) return;
+  const el = e.target.closest('button, .card, .r-item, #sheet-bg'); if (!el) return;
 
   if (el.id === 'sheet-bg') return closeSheet();
   if (el.id === 'fab') return quickAdd();
@@ -542,6 +611,8 @@ document.addEventListener('click', e => {
 
   // פעולות מהירות על כרטיס
   if (el.dataset.start) { e.stopPropagation(); const t = db.tasks.find(x => x.id === el.dataset.start); setStatus(t, 'progress'); save(); render(); return toast('הועבר לטיפול'); }
+  if (el.dataset.snooze) { e.stopPropagation(); const t = db.tasks.find(x => x.id === el.dataset.snooze); t.remindAt = Math.floor((Date.now() + 3600000) / 60000) * 60000; t.remindDone = false; save(); render(); return toast('אזכיר שוב בעוד שעה'); }
+  if (el.dataset.rdone) { e.stopPropagation(); const t = db.tasks.find(x => x.id === el.dataset.rdone); t.remindDone = true; save(); render(); return; }
   if (el.dataset.close) { e.stopPropagation(); return closeFlow(el.dataset.close); }
   if (el.dataset.doneR) { e.stopPropagation(); return routineDone(el.dataset.doneR); }
   if (el.dataset.open) return taskDetail(el.dataset.open);
@@ -564,7 +635,12 @@ document.addEventListener('click', e => {
   const t = s && s.id ? db.tasks.find(y => y.id === s.id) : null;
   switch (x) {
     case 'cancel': return closeSheet();
-    case 'q-save': return quickSave();
+    case 'q-save': return quickSave(false);
+    case 'q-save-gcal': return quickSave(true);
+    case 'q-more': $('#q-more').classList.toggle('hidden'); el.classList.add('hidden'); return;
+    case 'd-clear-due': $('#d-due').value = ''; return;
+    case 'd-clear-rem': $('#d-rem').value = ''; return;
+    case 'd-gcal': detailCollect(t); save(); render(); openGcal(t); return;
     case 'd-save': detailCollect(t); save(); closeSheet(); render(); return toast('נשמר');
     case 'start': detailCollect(t); setStatus(t, 'progress'); save(); closeSheet(); render(); return toast('הועבר לטיפול');
     case 'reopen': detailCollect(t); setStatus(t, 'open'); save(); closeSheet(); render(); return toast('הוחזר לפתוחות');
@@ -616,7 +692,7 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('keydown', e => {
   if (e.key !== 'Enter') return;
-  if (e.target.id === 'q-title') { e.preventDefault(); quickSave(); }
+  if (e.target.id === 'q-title') { e.preventDefault(); quickSave(false); }
   if (e.target.id === 'rd-note') { e.preventDefault(); document.querySelector('[data-x="rd-save"]').click(); }
   if (e.target.id === 'd-log') { e.preventDefault(); document.querySelector('[data-x="log"]').click(); }
 });
@@ -630,5 +706,8 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && !s
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
+
+// בדיקת תזכורות כל 30 שניות כשהאפליקציה פתוחה
+setInterval(() => { if (!sheetState && !document.hidden) render(); }, 30000);
 
 render();
