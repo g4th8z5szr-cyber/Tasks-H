@@ -320,7 +320,6 @@ function render() {
   if (ui.tab === 'contacts') { $('#main').innerHTML = contactsView(); return; }
   const list = currentItems(true);
   let html = '';
-  if (ui.tab === 'open' && ui.dept === 'all') html += focusBox();
   if (!list.length) html += emptyMsg();
   else if (ui.dept === 'all' && ui.tab !== 'closed') {
     const groups = {};
