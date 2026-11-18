@@ -473,6 +473,9 @@ function quickAdd(prefillDue) {
     <div id="q-more" class="hidden">
       <label>תאריך יעד</label><input id="q-due" type="date" class="field">
     </div>
+    <button class="link-btn" data-x="q-cshow" id="q-cshow">👷 טכנאי / ספק <span class="note">(לא חובה)</span></button>
+    <div id="q-cwrap" class="hidden"><label>👷 טכנאי / ספק <span id="q-csug" class="auto"></span></label>
+      <div class="row mt0 center"><div id="q-csel" class="grow"></div><span id="q-call"></span></div></div>
     ${photoStrip([])}
     <div class="row"><button class="btn" data-x="cancel">ביטול</button><button class="btn primary" data-x="q-save">שמור</button></div>`);
   quickRefresh();
@@ -493,7 +496,46 @@ function quickRefresh() {
   $('#q-type').innerHTML = pickChips('type', TYPES, s.type, s.manual.type ? null : g.type);
   $('#q-prio').innerHTML = pickChips('prio', PRIOS, s.prio, !s.manual.prio && (g.prio === 1 || sim.length) ? s.prio : null);
   $('#q-rep').innerHTML = repeatBox(sim);
+  if (!s.manual.contact) {
+    const sug = suggestContact(text, s.type, s.dept, sim);
+    s.contactId = sug ? sug.c.id : null;
+    renderQuickContact(sug ? sug.why : '');
+    if (sug) showQuickContact();
+  }
 }
+const ROLE_HINTS = {
+  plumb: ['אינסטל', 'שרברב'], elec: ['חשמל'], it: ['מחשב', 'קופ', 'תקשורת', 'it'],
+  build: ['שיפוצ', 'אחזק', 'הנדימן', 'נגר', 'מסגר'],
+};
+function rolesFor(text, type) {
+  if (type === 'equip') {
+    const n = norm(text);
+    if (/מקרר|מקפיא|קירור|קרח|בלאסט|מדחס/.test(n)) return ['קירור'];
+    if (/מזג/.test(n)) return ['מזגנ'];
+    if (/מדיח/.test(n)) return ['מדיח'];
+    if (/קפה|אספרסו/.test(n)) return ['קפה'];
+    return ['ציוד מטבח', 'ציוד'];
+  }
+  return ROLE_HINTS[type] || [];
+}
+function suggestContact(text, type, dept, sim) {
+  if (!db.contacts.length || !text.trim() || type === 'task') return null;
+  const prev = (sim || []).find(t => t.contactId && db.contacts.some(c => c.id === t.contactId));
+  if (prev) return { c: db.contacts.find(c => c.id === prev.contactId), why: 'טיפל בפעם הקודמת' };
+  const hints = rolesFor(text, type).map(norm);
+  if (!hints.length) return null;
+  const jobs = id => db.tasks.filter(t => t.contactId === id).length;
+  const cands = db.contacts.filter(c => { const r = norm(c.role || ''); return r && hints.some(h => r.includes(h)); })
+    .sort((a, b) => ((b.dept === dept) - (a.dept === dept)) || jobs(b.id) - jobs(a.id));
+  return cands.length ? { c: cands[0], why: 'לפי סוג התקלה' } : null;
+}
+function renderQuickContact(why) {
+  const s = sheetState; if (!$('#q-csel')) return;
+  $('#q-csel').innerHTML = contactSelect('q-contact', s.contactId);
+  $('#q-csug').textContent = why ? 'הצעה: ' + why : '';
+  $('#q-call').innerHTML = callBtn(db.contacts.find(c => c.id === s.contactId), true);
+}
+function showQuickContact() { $('#q-cwrap').classList.remove('hidden'); $('#q-cshow').classList.add('hidden'); }
 function repeatBox(sim) {
   if (!sim.length) return '';
   const last = lastTreated(sim);
@@ -511,6 +553,7 @@ function quickSave() {
     id: uid(), title, notes: ($('#q-desc') ? $('#q-desc').value.trim() : ''), dept: s.dept || DEFAULT_DEPT, type: s.type || 'task', prio: s.prio,
     status: 'open', createdAt: Date.now(), log: [],
     due: parseDate($('#q-due').value), photos: s.photos.slice(),
+    contactId: ($('#q-contact') && $('#q-contact').value) || null,
   };
   s.saved = true;
 
@@ -1095,6 +1138,11 @@ document.addEventListener('click', e => {
   }
 });
 document.addEventListener('change', e => {
+  if (e.target.id === 'q-contact' && sheetState) {
+    sheetState.manual.contact = true; sheetState.contactId = e.target.value || null;
+    $('#q-csug').textContent = '';
+    $('#q-call').innerHTML = callBtn(db.contacts.find(c => c.id === sheetState.contactId), true);
+  }
   if (e.target.id === 'ph-input' && e.target.files[0]) { addPhotoFile(e.target.files[0]); e.target.value = ''; }
   if (e.target.id === 'vcf-input' && e.target.files.length) {
     Promise.all([...e.target.files].map(f => f.text())).then(texts => {
@@ -1165,6 +1213,7 @@ document.addEventListener('click', e => {
   switch (x) {
     case 'cancel': return closeSheet();
     case 'cal-add': return quickAdd(ui.calDay);
+    case 'q-cshow': showQuickContact(); renderQuickContact(''); return;
     case 'q-save': return quickSave();
     case 'q-more': {
       $('#q-more').classList.remove('hidden'); el.classList.add('hidden');
