@@ -221,3 +221,15 @@ select.field { -webkit-appearance: none; appearance: none; flex: 1; min-width: 0
 .bar-row b { width: 26px; text-align: left; flex: none; }
 .r-btn[disabled] { opacity: .3; }
 .stats-nav { margin-inline-end: 44px; margin-top: 2px; }
+
+/* בורר סטטוס */
+.seg { display: flex; background: var(--chip); border-radius: 12px; padding: 3px; gap: 3px; }
+.seg-b { flex: 1; padding: 10px 4px; border-radius: 10px; font-weight: 700; font-size: 15px; color: var(--muted); }
+.seg-b.on { color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+.seg-b.st-open.on { background: var(--p2); }
+.seg-b.st-progress.on { background: var(--accent); }
+.seg-b.st-closed.on { background: var(--ok); }
+
+/* תיאור תקלה */
+.desc-in { width: 100%; margin-top: 8px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); font-size: 16px; min-height: 0 !important; resize: none; }
+.card .desc { color: var(--muted); font-size: 14px; margin-top: 4px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; }

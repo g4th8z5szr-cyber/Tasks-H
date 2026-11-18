@@ -357,6 +357,7 @@ function cardHtml(it) {
         ${t.contactId && contactName(t.contactId) ? `<span class="tag">👷 ${esc(contactName(t.contactId))}</span>` : ''}
         ${(() => { const ds = dueState(t); return ds ? `<span class="tag ${ds.cls}">${ds.txt}</span>` : ''; })()}
         <span>${when}</span></div>
+      ${t.notes ? `<div class="desc">${esc(t.notes)}</div>` : ''}
       ${t.status === 'closed' && t.treatment ? `<div class="meta">טיפול: ${esc(t.treatment)}</div>` : ''}
     </div>${act}</div>`;
 }
@@ -463,6 +464,7 @@ function quickAdd(prefillDue) {
   if (sheetState.dept) sheetState.manual.dept = true;
   openSheet(`<h2>תקלה / משימה חדשה</h2>
     <input id="q-title" class="field" placeholder="למשל: מקרר בר לא מקרר" autocomplete="off" enterkeyhint="done">
+    <textarea id="q-desc" class="desc-in" rows="2" placeholder="📝 תיאור התקלה (לא חובה)"></textarea>
     <div id="q-rep"></div>
     <label>מחלקה</label><div id="q-dept"></div>
     <label>סוג</label><div id="q-type"></div>
@@ -506,7 +508,7 @@ function quickSave() {
   const s = sheetState, title = $('#q-title').value.trim();
   if (!title) { $('#q-title').focus(); return; }
   const t = {
-    id: uid(), title, notes: '', dept: s.dept || DEFAULT_DEPT, type: s.type || 'task', prio: s.prio,
+    id: uid(), title, notes: ($('#q-desc') ? $('#q-desc').value.trim() : ''), dept: s.dept || DEFAULT_DEPT, type: s.type || 'task', prio: s.prio,
     status: 'open', createdAt: Date.now(), log: [],
     due: parseDate($('#q-due').value), photos: s.photos.slice(),
   };
@@ -543,7 +545,7 @@ function taskDetail(id) {
     <label>👷 טכנאי / ספק</label>
     <div class="row mt0 center">${contactSelect('d-contact', t.contactId)}${(() => { const c = db.contacts.find(x => x.id === t.contactId); return callBtn(c, true); })()}</div>
     <label>📷 תמונות</label>${photoStrip(t.photos)}
-    <label>הערות</label><textarea id="d-notes" placeholder="מספר דגם, מספר קריאה, פרטים נוספים...">${esc(t.notes || '')}</textarea>
+    <label>📝 תיאור / הערות</label><textarea id="d-notes" placeholder="תיאור התקלה, מספר דגם, מספר קריאה...">${esc(t.notes || '')}</textarea>
     ${t.status === 'closed' ? `<label>איך טופל</label><textarea id="d-treat">${esc(t.treatment || '')}</textarea>` : ''}
     <label>עדכון מהלך הטיפול</label>
     <div class="row mt0"><input id="d-log" class="field" placeholder="למשל: הוזמן טכנאי לשעה 10"><button class="btn small primary" data-x="log">הוסף</button></div>
@@ -1108,7 +1110,12 @@ document.addEventListener('click', e => {
     case 'cancel': return closeSheet();
     case 'cal-add': return quickAdd(ui.calDay);
     case 'q-save': return quickSave();
-    case 'q-more': $('#q-more').classList.toggle('hidden'); el.classList.add('hidden'); return;
+    case 'q-more': {
+      $('#q-more').classList.remove('hidden'); el.classList.add('hidden');
+      const di = $('#q-due'); di.focus();
+      try { if (di.showPicker) di.showPicker(); } catch (err) { /* הדפדפן יפתח בלחיצה */ }
+      return;
+    }
     case 'd-clear-due': $('#d-due').value = ''; return;
     case 'd-save': detailCollect(t); save(); closeSheet(); render(); return toast('נשמר');
     case 'start': detailCollect(t); setStatus(t, 'progress'); save(); closeSheet(); render(); return toast('הועבר לטיפול');
