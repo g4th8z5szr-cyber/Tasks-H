@@ -406,6 +406,8 @@ function openSheet(html, tall) {
   $('#sheet').scrollTop = 0;
 }
 function closeSheet() {
+  const back = returnTo; returnTo = null;
+  if (back) setTimeout(back, 0);
   if (sheetState && sheetState.kind === 'quick' && !sheetState.saved && sheetState.photos) sheetState.photos.forEach(id => photoDel(id));
   $('#sheet').classList.add('hidden'); $('#sheet-bg').classList.add('hidden'); $('#sheet').innerHTML = '';
   sheetState = null;
@@ -865,6 +867,29 @@ function contactSelect(id, selected) {
     .map(c => `<option value="${c.id}" ${c.id === selected ? 'selected' : ''}>${esc(c.name)}${c.role ? ' – ' + esc(c.role) : ''}</option>`).join('');
   return `<select id="${id}" class="field"><option value="">— ללא —</option>${opts}</select>`;
 }
+/* ---------- כל המשימות הפתוחות של שתי המסעדות ---------- */
+let returnTo = null; // לאן לחזור אחרי שסוגרים משימה שנפתחה מהסקירה
+function overviewSheet() {
+  sheetState = { kind: 'overview' };
+  const live = db.tasks.filter(t => t.status !== 'closed');
+  const tiles = RESTS.map(r => {
+    const mine = live.filter(t => (t.rest || 'ramah') === r.id);
+    const urgent = mine.filter(t => t.prio === 1).length;
+    return `<div class="tile"><b>${mine.length}</b><span>${esc(r.name)}</span><small>${mine.filter(t => t.status === 'progress').length} בטיפול${urgent ? ` · <span class="r-over">${urgent === 1 ? 'דחופה אחת' : urgent + ' דחופות'}</span>` : ''}</small></div>`;
+  }).join('');
+  const sections = RESTS.map(r => {
+    const mine = live.filter(t => (t.rest || 'ramah') === r.id).sort(taskSort);
+    if (!mine.length) return `<div class="group-h"><span>${esc(r.name)}</span><span>0</span></div><div class="note">אין משימות פתוחות 🎉</div>`;
+    return `<div class="group-h ov-h"><span>${esc(r.name)}</span><span>${mine.length}</span></div>` + mine.map(t => {
+      const ds = dueState(t);
+      return `<div class="card" data-ovopen="${t.id}"><div class="bar pr${t.prio}"></div><div class="body"><div class="t">${esc(t.title)}</div>
+        <div class="meta"><span class="tag">${esc(t.dept || '')}</span>${t.status === 'progress' ? '<span class="tag st-prog">בטיפול</span>' : '<span class="tag st-open">פתוחה</span>'}
+        ${t.repeats ? `<span class="tag rep">↻ ×${t.repeats + 1}</span>` : ''}${ds ? `<span class="tag ${ds.cls}">${ds.txt}</span>` : ''}<span>${ago(t.createdAt)}</span></div></div></div>`;
+    }).join('');
+  }).join('');
+  openSheet(`<h2>📋 כל המשימות הפתוחות</h2><div class="tiles">${tiles}</div>${sections}
+    <div class="row"><button class="btn" data-x="cancel">סגור</button></div>`, true);
+}
 function contactsFiltered() {
   const nq = norm(ui.q || '');
   return db.contacts.filter(c => !nq || norm(`${c.name} ${c.role} ${c.dept} ${c.notes} ${c.phone}`).includes(nq));
@@ -1124,9 +1149,11 @@ function statsSheet(offset, rest) {
 /* ---------- אירועים של התוספות ---------- */
 document.addEventListener('click', e => {
   if (e.target.closest('a.call')) return; // חיוג – לא לפתוח עריכה
-  const el = e.target.closest('button, [data-ph], [data-cedit], [data-fhist]'); if (!el) return;
+  const el = e.target.closest('button, [data-ph], [data-cedit], [data-fhist], [data-ovopen]'); if (!el) return;
   const d = el.dataset;
   if (el.id === 'btnContacts') return contactsSheet();
+  if (el.id === 'btnAll') return overviewSheet();
+  if (d.ovopen) { taskDetail(d.ovopen); returnTo = overviewSheet; return; }
   if (el.id === 'btnTemps') return tempsSheet();
   if (el.id === 'btnStats') return statsSheet(0);
   if (d.ph) return showPhoto(d.ph);
