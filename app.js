@@ -262,6 +262,7 @@ function setRest(id) {
   ui.rest = id; try { localStorage.setItem('tk.rest', id); } catch (e) { /* */ }
   if (ui.dept !== 'all' && !deptsOf(id).includes(ui.dept)) ui.dept = 'all';
 }
+if (ui.tab === 'contacts') ui.tab = 'open';
 const inRest = x => (x.rest || 'ramah') === ui.rest;
 const TITLES = { open: 'משימות פתוחות', progress: 'משימות בטיפול', closed: 'משימות סגורות', routine: 'טיפול שוטף', cal: 'יומן', contacts: 'טכנאים וספקים' };
 
@@ -398,7 +399,8 @@ function cardHtml(it) {
 }
 
 /* ---------- גיליונות (חלונות קופצים) ---------- */
-function openSheet(html) {
+function openSheet(html, tall) {
+  $('#sheet').classList.toggle('tall', !!tall);
   $('#sheet').innerHTML = '<div class="grab"></div><button class="x-close" data-x="cancel" aria-label="סגירה">✕</button>' + html;
   $('#sheet').classList.remove('hidden'); $('#sheet-bg').classList.remove('hidden');
   $('#sheet').scrollTop = 0;
@@ -882,19 +884,27 @@ function contactsView() {
     return `<div class="group-h"><span>${esc(role)}</span><span>${groups[role].length}</span></div>${rows}`;
   }).join('');
 }
-function contactsSheet(q) {
+function contactsSheet() {
   sheetState = { kind: 'contacts' };
-  const nq = norm(q || '');
-  const list = db.contacts.filter(c => !nq || norm(`${c.name} ${c.role} ${c.dept} ${c.notes} ${c.phone}`).includes(nq))
-    .sort((a, b) => (a.role || '').localeCompare(b.role || '', 'he') || a.name.localeCompare(b.name, 'he'));
   openSheet(`<h2>📇 טכנאים וספקים</h2>
-    ${db.contacts.length > 5 ? `<input id="c-search" class="field" type="search" placeholder="חיפוש..." value="${esc(q || '')}">` : ''}
-    <div id="c-list">${list.map(c => {
+    <button class="btn primary full" data-x="c-new">+ איש קשר חדש</button>
+    ${db.contacts.length ? '<input id="c-search" class="field mt8" type="search" placeholder="🔍 חיפוש לפי שם, תפקיד או טלפון" autocomplete="off">' : ''}
+    <div id="c-list">${contactListHtml('')}</div>
+    <div class="row"><button class="btn" data-x="cancel">סגור</button></div>`, true);
+}
+function contactListHtml(q) {
+  const nq = norm(q || '');
+  const list = db.contacts.filter(c => !nq || norm(`${c.name} ${c.role} ${c.dept} ${c.notes} ${c.phone}`).includes(nq));
+  if (!list.length) return `<div class="empty small">${db.contacts.length ? 'לא נמצאו אנשי קשר' : 'עוד אין טכנאים וספקים.<br>הוסיפו אותם כדי לחייג בלחיצה ולקבל הצעות בתקלות.'}</div>`;
+  const groups = {};
+  for (const c of list) (groups[c.role || 'ללא תפקיד'] = groups[c.role || 'ללא תפקיד'] || []).push(c);
+  return Object.keys(groups).sort((a, b) => a === 'ללא תפקיד' ? 1 : b === 'ללא תפקיד' ? -1 : a.localeCompare(b, 'he')).map(role =>
+    `<div class="group-h"><span>${esc(role)}</span><span>${groups[role].length}</span></div>` +
+    groups[role].sort((a, b) => a.name.localeCompare(b.name, 'he')).map(c => {
       const jobs = db.tasks.filter(t => t.contactId === c.id).length;
-      return `<div class="c-row" data-cedit="${c.id}"><div class="body"><b>${esc(c.name)}</b>
-        <small>${esc(c.role || '')}${c.dept ? ' · ' + esc(c.dept) : ''}${jobs ? ` · ${jobs} טיפולים` : ''}</small></div>${callBtn(c)}</div>`;
-    }).join('') || '<div class="empty small">עוד אין אנשי קשר.<br>הוסיפו טכנאים וספקים כדי לחייג אליהם בלחיצה.</div>'}</div>
-    <div class="row"><button class="btn" data-x="cancel">סגור</button><button class="btn primary" data-x="c-new">+ איש קשר חדש</button></div>`);
+      return `<div class="card c-card" data-cedit="${c.id}"><div class="body"><div class="t">${esc(c.name)}</div>
+        <div class="meta">${c.phone ? `<span dir="ltr">${esc(c.phone)}</span>` : ''}${c.dept ? `<span class="tag">${esc(c.dept)}</span>` : ''}${jobs ? `<span>${jobs} טיפולים</span>` : ''}</div></div>${callBtn(c)}</div>`;
+    }).join('')).join('');
 }
 /* ייבוא אנשי קשר – הכול מקומי, בלי רשת */
 function parseVcf(text) {
@@ -1107,7 +1117,7 @@ function statsSheet(offset, rest) {
     ${Object.keys(byContact).length ? `<label>👷 טכנאים וספקים שטיפלו</label>${bars(byContact, Math.max(...Object.values(byContact)))}` : ''}
     <label>טיפול שוטף</label>
     <div class="kv">↻ ${routineDoneN} טיפולים שוטפים בוצעו${db.routine.some(mine) ? ` · ${db.routine.filter(r => mine(r) && routineState(r).days < 0).length} באיחור כרגע` : ''}</div>
-    <div class="row"><button class="btn" data-x="cancel">סגור</button></div>`);
+    <div class="row"><button class="btn" data-x="cancel">סגור</button></div>`, true);
   document.querySelectorAll('#sheet [data-w]').forEach(i => { i.style.width = Math.max(3, Number(i.dataset.w)) + '%'; });
 }
 
@@ -1116,7 +1126,7 @@ document.addEventListener('click', e => {
   if (e.target.closest('a.call')) return; // חיוג – לא לפתוח עריכה
   const el = e.target.closest('button, [data-ph], [data-cedit], [data-fhist]'); if (!el) return;
   const d = el.dataset;
-  if (el.id === 'btnContacts') { ui.tab = 'contacts'; ui.q = ''; $('#search').value = ''; window.scrollTo(0, 0); return render(); }
+  if (el.id === 'btnContacts') return contactsSheet();
   if (el.id === 'btnTemps') return tempsSheet();
   if (el.id === 'btnStats') return statsSheet(0);
   if (d.ph) return showPhoto(d.ph);
@@ -1155,19 +1165,19 @@ document.addEventListener('click', e => {
         importContacts(res.map(r => ({ name: (r.name || [])[0] || '', phone: (r.tel || [])[0] || '' })));
       }).catch(() => toast('לא הצלחתי לפתוח את אנשי הקשר'));
       return;
-    case 'c-back': closeSheet(); return render();
+    case 'c-back': return contactsSheet();
     case 'ce-save': {
       const name = $('#ce-name').value.trim(); if (!name) return $('#ce-name').focus();
       const data = { name, phone: $('#ce-phone').value.trim(), role: $('#ce-role').value.trim(), dept: sheetState.dept || null, notes: $('#ce-notes').value.trim() };
       if (sheetState.id) Object.assign(db.contacts.find(x => x.id === sheetState.id), data);
       else db.contacts.push({ id: uid(), createdAt: Date.now(), ...data });
-      save(); closeSheet(); render(); return toast('נשמר');
+      save(); toast('נשמר'); return contactsSheet();
     }
     case 'ce-del':
       if (!confirm('למחוק את איש הקשר?')) return;
       db.contacts = db.contacts.filter(x => x.id !== sheetState.id);
       for (const t of db.tasks) if (t.contactId === sheetState.id) t.contactId = null;
-      save(); closeSheet(); return render();
+      save(); return contactsSheet();
     case 'f-new': return fridgeEdit(null);
     case 't-back': return tempsSheet();
     case 'fe-save': {
@@ -1220,10 +1230,7 @@ document.addEventListener('change', e => {
   }
 });
 document.addEventListener('input', e => {
-  if (e.target.id === 'c-search') {
-    const q = e.target.value; contactsSheet(q);
-    const s = $('#c-search'); if (s) { s.focus(); s.setSelectionRange(q.length, q.length); }
-  }
+  if (e.target.id === 'c-search') $('#c-list').innerHTML = contactListHtml(e.target.value);
 });
 
 /* ---------- אירועים ---------- */
