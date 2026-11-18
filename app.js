@@ -256,8 +256,8 @@ function toast(msg) {
 }
 
 /* ---------- מצב ממשק ---------- */
-const ui = { tab: 'open', dept: 'all', q: '' };
-const TITLES = { open: 'משימות פתוחות', progress: 'משימות בטיפול', closed: 'משימות סגורות', routine: 'טיפול שוטף' };
+const ui = { tab: 'open', dept: 'all', q: '', calMonth: null, calDay: null };
+const TITLES = { open: 'משימות פתוחות', progress: 'משימות בטיפול', closed: 'משימות סגורות', routine: 'טיפול שוטף', cal: 'יומן' };
 
 function taskSort(a, b) {
   if (a.prio !== b.prio) return a.prio - b.prio;
@@ -300,6 +300,7 @@ function render() {
   $('#b-progress').textContent = db.tasks.filter(t => t.status === 'progress').length || '';
   $('#b-routine').textContent = db.routine.filter(r => routineState(r).days <= 0).length || '';
 
+  if (ui.tab === 'cal') { $('#main').innerHTML = remindStrip() + calendarHtml(); return; }
   const list = currentItems(true);
   let html = '';
   if (ui.tab !== 'routine') html += remindStrip();
@@ -320,6 +321,8 @@ function currentItems(applyFilter) {
   let list;
   if (ui.tab === 'routine') {
     list = db.routine.slice().sort((a, b) => routineDue(a) - routineDue(b));
+  } else if (ui.tab === 'cal') {
+    list = db.tasks.filter(t => t.status !== 'closed' && (t.due || (t.remindAt && !t.remindDone))).concat(db.routine);
   } else {
     list = db.tasks.filter(t => t.status === ui.tab);
     if (ui.tab === 'closed') {
@@ -403,9 +406,83 @@ function pickChips(name, options, selected, autoVal) {
   }).join('') + '</div>';
 }
 
+/* --- יומן --- */
+const HEB_DAYS = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
+const fmtMonth = new Intl.DateTimeFormat('he-IL', { month: 'long', year: 'numeric' });
+const fmtDayLong = new Intl.DateTimeFormat('he-IL', { weekday: 'long', day: 'numeric', month: 'long' });
+let fmtHebDate = null;
+try { fmtHebDate = new Intl.DateTimeFormat('he-IL-u-ca-hebrew', { day: 'numeric', month: 'long' }); } catch (e) { /* לא נתמך */ }
+function addDays(ts, n) { const d = new Date(ts); d.setDate(d.getDate() + n); return d.getTime(); }
+
+// כל האירועים בטווח תאריכים, לפי יום: { [startOfDay]: [ {kind, item, ts} ] }
+function calEvents(from, to) {
+  const map = {}, today = startOfDay(Date.now());
+  const put = (ts, ev) => { const k = startOfDay(ts); if (k < from || k > to) return; (map[k] = map[k] || []).push(ev); };
+  const okDept = x => ui.dept === 'all' || x.dept === ui.dept;
+  for (const t of db.tasks) {
+    if (t.status === 'closed' || !okDept(t)) continue;
+    if (t.due) put(t.due, { kind: 'due', item: t, ts: t.due, over: startOfDay(t.due) < today });
+    if (t.remindAt && !t.remindDone) put(t.remindAt, { kind: 'rem', item: t, ts: t.remindAt });
+  }
+  for (const r of db.routine) {
+    if (!okDept(r)) continue;
+    const step = Math.max(1, r.every);
+    let d = startOfDay(routineDue(r));
+    if (!r.last || d < today) { put(today, { kind: 'routine', item: r, ts: today, over: true }); d = addDays(today, step); }
+    if (d < from) { const k = Math.ceil((from - d) / (step * DAY)); d = addDays(d, k * step); }
+    for (let i = 0; d <= to && i < 400; i++, d = addDays(d, step)) put(d, { kind: 'routine', item: r, ts: d });
+  }
+  for (const k in map) map[k].sort((a, b) => ({ due: 0, rem: 1, routine: 2 })[a.kind] - ({ due: 0, rem: 1, routine: 2 })[b.kind] || a.ts - b.ts);
+  return map;
+}
+function calendarHtml() {
+  const today = startOfDay(Date.now());
+  if (!ui.calMonth) { const d = new Date(); ui.calMonth = new Date(d.getFullYear(), d.getMonth(), 1).getTime(); }
+  if (!ui.calDay) ui.calDay = today;
+  const m = new Date(ui.calMonth);
+  const first = ui.calMonth, last = new Date(m.getFullYear(), m.getMonth() + 1, 0).getTime();
+  const gridStart = addDays(first, -new Date(first).getDay());
+  const gridEnd = addDays(last, 6 - new Date(last).getDay());
+  const ev = calEvents(gridStart, gridEnd);
+
+  let cells = '';
+  for (let d = gridStart; d <= gridEnd; d = addDays(d, 1)) {
+    const list = ev[d] || [];
+    const kinds = new Set(list.map(e => e.kind === 'due' && e.over ? 'over' : e.kind === 'routine' && e.over ? 'over' : e.kind));
+    const dots = ['over', 'due', 'rem', 'routine'].filter(k => kinds.has(k)).map(k => `<i class="dot d-${k}"></i>`).join('');
+    const cls = ['cal-d', new Date(d).getMonth() !== m.getMonth() ? 'out' : '', d === today ? 'today' : '', d === ui.calDay ? 'sel' : ''].join(' ');
+    cells += `<button class="${cls}" data-day="${d}"><span>${new Date(d).getDate()}</span><span class="dots">${dots}</span></button>`;
+  }
+
+  const dayList = ev[ui.calDay] || [];
+  const heb = fmtHebDate ? ' · ' + fmtHebDate.format(ui.calDay) : '';
+  const rows = dayList.map(e => {
+    const it = e.item;
+    const label = e.kind === 'due' ? (e.over ? '<span class="tag over">⚠ יעד עבר</span>' : '<span class="tag">📅 יעד</span>')
+      : e.kind === 'rem' ? `<span class="tag today">🔔 ${fmtTime.format(e.ts)}</span>`
+      : `<span class="tag ${e.over ? 'over' : ''}">↻ שוטף${e.over ? ' – לביצוע' : ''}</span>`;
+    const open = e.kind === 'routine' ? `data-open-r="${it.id}"` : `data-open="${it.id}"`;
+    return `<div class="card" ${open}>${e.kind !== 'routine' ? `<div class="bar pr${it.prio}"></div>` : ''}<div class="body"><div class="t">${esc(it.title)}</div>
+      <div class="meta">${label}<span class="tag">${esc(it.dept || '')}</span>${e.kind !== 'routine' && it.status === 'progress' ? '<span>בטיפול</span>' : ''}</div></div></div>`;
+  }).join('');
+
+  return `<div class="cal">
+    <div class="cal-nav"><button class="r-btn" data-cal-nav="-1" aria-label="חודש קודם">›</button>
+      <b>${fmtMonth.format(first)}</b>
+      <button class="r-btn" data-cal-nav="1" aria-label="חודש הבא">‹</button></div>
+    ${ui.calMonth !== new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime() || ui.calDay !== today ? '<button class="link-btn cal-today" data-cal-nav="0">חזרה להיום</button>' : ''}
+    <div class="cal-grid">${HEB_DAYS.map(x => `<div class="cal-h">${x}</div>`).join('')}${cells}</div>
+    <div class="cal-legend"><span><i class="dot d-over"></i>באיחור</span><span><i class="dot d-due"></i>יעד</span><span><i class="dot d-rem"></i>תזכורת</span><span><i class="dot d-routine"></i>שוטף</span></div>
+  </div>
+  <div class="group-h"><span>${fmtDayLong.format(ui.calDay)}${heb}</span><span>${dayList.length || ''}</span></div>
+  ${rows || '<div class="empty small">אין כלום ביום הזה</div>'}
+  <button class="btn gcal mt8" data-x="cal-add">+ משימה ליום הזה</button>`;
+}
+
 /* --- הוספה מהירה --- */
-function quickAdd() {
+function quickAdd(prefillDue) {
   if (ui.tab === 'routine') return routineEdit(null);
+  if (ui.tab === 'cal' && prefillDue === undefined) prefillDue = ui.calDay;
   sheetState = { kind: 'quick', manual: {}, dept: ui.dept !== 'all' ? ui.dept : null, type: null, prio: 3, auto: {} };
   if (sheetState.dept) sheetState.manual.dept = true;
   openSheet(`<h2>תקלה / משימה חדשה</h2>
@@ -422,6 +499,7 @@ function quickAdd() {
     </div>
     <div class="row"><button class="btn" data-x="cancel">ביטול</button><button class="btn primary" data-x="q-save">שמור</button></div>`);
   quickRefresh();
+  if (prefillDue) { $('#q-more').classList.remove('hidden'); document.querySelector('[data-x="q-more"]').classList.add('hidden'); $('#q-due').value = toInputDate(prefillDue); }
   const inp = $('#q-title'); inp.focus();
 }
 function quickRefresh() {
@@ -464,7 +542,7 @@ function quickSave(withGcal) {
   db.tasks.push(t);
   if (t.dept) learnFrom(title, t.dept, t.type);
   save(); closeSheet();
-  if (ui.tab !== 'open') ui.tab = 'open';
+  if (ui.tab !== 'open' && ui.tab !== 'cal') ui.tab = 'open';
   render(); toast(sim.length ? 'נשמר · סומן כתקלה חוזרת' : 'נשמר');
 }
 
@@ -606,6 +684,13 @@ document.addEventListener('click', e => {
   if (el.id === 'sheet-bg') return closeSheet();
   if (el.id === 'fab') return quickAdd();
   if (el.id === 'btnSettings') return settings();
+  if (el.dataset.day) { ui.calDay = Number(el.dataset.day); const d = new Date(ui.calDay); ui.calMonth = new Date(d.getFullYear(), d.getMonth(), 1).getTime(); return render(); }
+  if (el.dataset.calNav !== undefined) {
+    const n = Number(el.dataset.calNav), m = new Date(ui.calMonth);
+    if (n === 0) { ui.calMonth = null; ui.calDay = null; }
+    else { ui.calMonth = new Date(m.getFullYear(), m.getMonth() + n, 1).getTime(); ui.calDay = ui.calMonth; }
+    return render();
+  }
   if (el.dataset.tab) { ui.tab = el.dataset.tab; ui.dept = ui.dept; window.scrollTo(0, 0); return render(); }
   if (el.dataset.dept) { ui.dept = el.dataset.dept; return render(); }
 
@@ -635,6 +720,7 @@ document.addEventListener('click', e => {
   const t = s && s.id ? db.tasks.find(y => y.id === s.id) : null;
   switch (x) {
     case 'cancel': return closeSheet();
+    case 'cal-add': return quickAdd(ui.calDay);
     case 'q-save': return quickSave(false);
     case 'q-save-gcal': return quickSave(true);
     case 'q-more': $('#q-more').classList.toggle('hidden'); el.classList.add('hidden'); return;
@@ -704,7 +790,18 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && !s
 
 /* ---------- עבודה ללא אינטרנט ---------- */
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloading = false;
+  // כשגרסה חדשה מותקנת – טוענים אותה מייד (הנתונים לא נפגעים)
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloading) return;
+    reloading = true; location.reload();
+  });
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
+    // באייפון האפליקציה חוזרת מהרקע בלי טעינה מחדש – לכן בודקים עדכון בכל חזרה
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
+    reg.update().catch(() => {});
+  }).catch(() => {});
 }
 
 // בדיקת תזכורות כל 30 שניות כשהאפליקציה פתוחה
