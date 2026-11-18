@@ -787,7 +787,48 @@ function contactsSheet(q) {
       return `<div class="c-row" data-cedit="${c.id}"><div class="body"><b>${esc(c.name)}</b>
         <small>${esc(c.role || '')}${c.dept ? ' · ' + esc(c.dept) : ''}${jobs ? ` · ${jobs} טיפולים` : ''}</small></div>${callBtn(c)}</div>`;
     }).join('') || '<div class="empty small">עוד אין אנשי קשר.<br>הוסיפו טכנאים וספקים כדי לחייג אליהם בלחיצה.</div>'}</div>
+    <div class="row">${'contacts' in navigator && navigator.contacts && navigator.contacts.select ? '<button class="btn" data-x="c-pick">📱 מאנשי הקשר</button>' : ''}<button class="btn" data-x="c-vcf">📄 ייבוא מקובץ</button></div>
+    <input id="vcf-input" type="file" accept=".vcf,text/vcard,text/x-vcard" multiple class="hidden">
     <div class="row"><button class="btn" data-x="cancel">סגור</button><button class="btn primary" data-x="c-new">+ איש קשר חדש</button></div>`);
+}
+/* ייבוא אנשי קשר – הכול מקומי, בלי רשת */
+function parseVcf(text) {
+  const out = [];
+  const lines = text.replace(/\r\n?/g, '\n').replace(/\n[ \t]/g, '').split('\n');
+  let cur = null;
+  const unesc = v => v.replace(/\\n/gi, ' ').replace(/\\([,;\\])/g, '$1').trim();
+  for (const line of lines) {
+    const i = line.indexOf(':'); if (i < 0) continue;
+    const key = line.slice(0, i).toUpperCase(), val = line.slice(i + 1);
+    const prop = key.split(';')[0].replace(/^ITEM\d+\./, '');
+    if (prop === 'BEGIN') cur = { tels: [] };
+    else if (prop === 'END' && cur) { out.push(cur); cur = null; }
+    else if (!cur) continue;
+    else if (prop === 'FN') cur.fn = unesc(val);
+    else if (prop === 'N' && !cur.n) { const p = val.split(';').map(unesc); cur.n = [p[1], p[0]].filter(Boolean).join(' '); }
+    else if (prop === 'TEL') cur.tels.push({ v: unesc(val), mobile: /CELL|IPHONE|MOBILE/.test(key) });
+    else if (prop === 'ORG') cur.org = unesc(val.split(';')[0]);
+    else if (prop === 'TITLE') cur.title = unesc(val);
+    else if (prop === 'NOTE') cur.note = unesc(val);
+  }
+  return out.map(c => {
+    const tel = (c.tels.find(t => t.mobile) || c.tels[0] || {}).v || '';
+    return { name: c.fn || c.n || c.org || '', phone: tel, role: c.title || '', notes: [c.org && c.org !== c.fn ? c.org : '', c.note || ''].filter(Boolean).join(' · ') };
+  }).filter(c => c.name || c.phone);
+}
+function importContacts(list) {
+  const digits = p => String(p || '').replace(/\D/g, '').replace(/^972/, '0');
+  const have = new Set(db.contacts.map(c => digits(c.phone)).filter(Boolean));
+  let added = 0, lastId = null;
+  for (const c of list) {
+    if (c.phone && have.has(digits(c.phone))) continue;
+    const id = uid(); lastId = id;
+    db.contacts.push({ id, createdAt: Date.now(), name: c.name || c.phone, phone: c.phone || '', role: c.role || '', dept: null, notes: c.notes || '' });
+    if (c.phone) have.add(digits(c.phone)); added++;
+  }
+  save();
+  if (added === 1) { toast('נוסף – אפשר לבחור תפקיד ומחלקה'); return contactEdit(lastId); }
+  contactsSheet(); toast(added ? `נוספו ${added} אנשי קשר` : 'אנשי הקשר כבר קיימים ברשימה');
 }
 function contactEdit(id) {
   const c = id ? db.contacts.find(x => x.id === id) : null;
@@ -998,6 +1039,13 @@ document.addEventListener('click', e => {
   switch (d.x) {
     case 'ph-add': return $('#ph-input').click();
     case 'c-new': return contactEdit(null);
+    case 'c-vcf': return $('#vcf-input').click();
+    case 'c-pick':
+      navigator.contacts.select(['name', 'tel'], { multiple: true }).then(res => {
+        if (!res || !res.length) return;
+        importContacts(res.map(r => ({ name: (r.name || [])[0] || '', phone: (r.tel || [])[0] || '' })));
+      }).catch(() => toast('לא הצלחתי לפתוח את אנשי הקשר'));
+      return;
     case 'c-back': return contactsSheet();
     case 'ce-save': {
       const name = $('#ce-name').value.trim(); if (!name) return $('#ce-name').focus();
@@ -1048,6 +1096,14 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('change', e => {
   if (e.target.id === 'ph-input' && e.target.files[0]) { addPhotoFile(e.target.files[0]); e.target.value = ''; }
+  if (e.target.id === 'vcf-input' && e.target.files.length) {
+    Promise.all([...e.target.files].map(f => f.text())).then(texts => {
+      const list = texts.flatMap(parseVcf);
+      if (!list.length) return toast('לא נמצאו אנשי קשר בקובץ');
+      if (list.length > 1 && !confirm(`לייבא ${list.length} אנשי קשר?`)) return;
+      importContacts(list);
+    }).catch(() => toast('לא הצלחתי לקרוא את הקובץ'));
+  }
 });
 document.addEventListener('input', e => {
   if (e.target.id === 'c-search') {
