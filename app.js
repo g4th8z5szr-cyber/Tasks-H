@@ -5,7 +5,15 @@
    ========================================================= */
 
 /* ---------- הגדרות שקל לשנות ---------- */
-const DEPTS = ['פלור', 'מטבח', 'בר', 'הכנות', 'קצביה', 'משרד', 'לילינבלום', 'כללי'];
+// שתי המסעדות והמחלקות של כל אחת
+const RESTS = [
+  { id: 'ramah', name: 'רמה״ח', depts: ['פלור', 'מטבח', 'בר', 'הכנות', 'קצביה', 'משרד', 'כללי'] },
+  { id: 'lili', name: 'לילי', depts: ['פלור', 'מטבח', 'משרד', 'כללי'] },
+];
+const DEPTS = RESTS[0].depts.slice(); // כל המחלקות (לאנשי קשר)
+const REST_KW = { lili: ['לילי', 'לילינבלום'], ramah: ['רמהח', 'רמה״ח', 'רמה"ח'] };
+function deptsOf(rest) { return (RESTS.find(r => r.id === rest) || RESTS[0]).depts; }
+function restName(id) { return (RESTS.find(r => r.id === id) || RESTS[0]).name; }
 const DEFAULT_DEPT = 'כללי'; // לאן הולך כל מה שלא זוהתה לו מחלקה
 
 const TYPES = [
@@ -31,7 +39,6 @@ const DEPT_KW = {
   'הכנות': ['הכנות', 'ואקום', 'מיקסר', 'רובוטקופ', 'בלנדר', 'מקצפה', 'סוביד', 'סו ויד', 'בלאסט', 'קירור מהיר'],
   'קצביה': ['קצביה', 'קצב', 'בשר', 'מטחנה', 'מסור', 'יישון', 'נקניק', 'נקניקים', 'פירוק'],
   'משרד': ['משרד', 'מחשב', 'מדפסת', 'אינטרנט', 'ראוטר', 'וויפי', 'wifi', 'חשבונית', 'חשבוניות', 'שכר', 'משמרות', 'סידור עבודה', 'הנהלת חשבונות'],
-  'לילינבלום': ['לילינבלום'],
   'כללי': ['כללי'],
 };
 
@@ -79,7 +86,7 @@ function stem(w) { // הגרסה הקצרה ביותר – לשימוש בהשו
   for (const v of variants(w)) if (v.length < best.length) best = v;
   return best;
 }
-const DEPT_NORM = new Set(DEPTS.map(d => stem(norm(d))));
+const DEPT_NORM = new Set(DEPTS.concat(REST_KW.lili, REST_KW.ramah).map(d => stem(norm(d))));
 
 // בדיקה אם ביטוי (מילה אחת או יותר) מופיע בטקסט, כולל אותיות שימוש
 function hasPhrase(text, wordSets, phrase) {
@@ -95,7 +102,14 @@ function blank() { return { tasks: [], routine: [], contacts: [], fridges: [], t
 function fixShape(d) {
   d.routine = d.routine || []; d.contacts = d.contacts || []; d.fridges = d.fridges || []; d.temps = d.temps || [];
   d.learn = d.learn || { dept: {}, type: {} }; d.learn.dept = d.learn.dept || {}; d.learn.type = d.learn.type || {};
-  for (const x of d.tasks.concat(d.routine)) if (!x.dept) x.dept = DEFAULT_DEPT;
+  for (const x of d.tasks.concat(d.routine)) {
+    if (!x.rest) {
+      if (x.dept === 'לילינבלום') { x.rest = 'lili'; x.dept = DEFAULT_DEPT; } else x.rest = 'ramah';
+    }
+    if (!x.dept || !deptsOf(x.rest).includes(x.dept)) x.dept = DEFAULT_DEPT;
+  }
+  for (const c of d.contacts) if (c.dept && !DEPTS.includes(c.dept)) c.dept = null;
+  for (const f of d.fridges) if (f.dept && !DEPTS.includes(f.dept)) f.dept = DEFAULT_DEPT;
   return d;
 }
 function load() {
@@ -125,7 +139,12 @@ function learnFrom(text, dept, type) {
     (db.learn.type[s] = db.learn.type[s] || {})[type] = (db.learn.type[s][type] || 0) + 1;
   }
 }
-function guess(text) {
+function guessRest(text) {
+  const ws = analyzeWords(text);
+  for (const [id, kws] of Object.entries(REST_KW)) if (kws.some(k => hasPhrase(text, ws, k))) return id;
+  return null;
+}
+function guess(text, rest) {
   const ws = analyzeWords(text);
   const stems = words(text).map(stem);
   const res = { dept: null, type: null, prio: 3, isFault: false };
@@ -133,9 +152,9 @@ function guess(text) {
 
   // מחלקה
   const ds = {};
-  for (const d of DEPTS) {
+  for (const d of deptsOf(rest)) {
     let sc = 0;
-    for (const k of DEPT_KW[d]) if (hasPhrase(text, ws, k)) sc += (norm(k) === norm(d) ? 10 : 3);
+    for (const k of DEPT_KW[d] || []) if (hasPhrase(text, ws, k)) sc += (norm(k) === norm(d) ? 10 : 3);
     for (const s of stems) { const l = db.learn.dept[s]; if (l && l[d]) sc += Math.min(l[d], 5) * 0.8; }
     if (sc) ds[d] = sc;
   }
@@ -180,12 +199,13 @@ function similarity(a, b) {
   let inter = 0; for (const x of a) if (b.has(x)) inter++;
   return { inter, score: inter / Math.min(a.size, b.size) };
 }
-function findSimilar(text, dept, excludeId) {
+function findSimilar(text, dept, excludeId, rest) {
   const me = sigTokens(text);
   if (!me.size) return [];
   const out = [];
   for (const t of db.tasks) {
     if (t.id === excludeId || t.type === 'task') continue;
+    if (rest && (t.rest || 'ramah') !== rest) continue;
     const { inter, score } = similarity(me, sigTokens(t.title));
     const sameDept = !dept || !t.dept || t.dept === dept;
     if (inter >= 1 && ((sameDept && score >= 0.5) || (inter >= 2 && score >= 0.8))) out.push({ t, score: score + (sameDept ? 0.2 : 0) });
@@ -236,7 +256,13 @@ function toast(msg) {
 }
 
 /* ---------- מצב ממשק ---------- */
-const ui = { tab: 'open', dept: 'all', q: '', calMonth: null, calDay: null };
+const ui = { tab: 'open', dept: 'all', q: '', calMonth: null, calDay: null, rest: 'ramah' };
+try { const r = localStorage.getItem('tk.rest'); if (RESTS.some(x => x.id === r)) ui.rest = r; } catch (e) { /* */ }
+function setRest(id) {
+  ui.rest = id; try { localStorage.setItem('tk.rest', id); } catch (e) { /* */ }
+  if (ui.dept !== 'all' && !deptsOf(id).includes(ui.dept)) ui.dept = 'all';
+}
+const inRest = x => (x.rest || 'ramah') === ui.rest;
 const TITLES = { open: 'משימות פתוחות', progress: 'משימות בטיפול', closed: 'משימות סגורות', routine: 'טיפול שוטף', cal: 'יומן', contacts: 'טכנאים וספקים' };
 
 function taskSort(a, b) {
@@ -269,18 +295,25 @@ function render() {
   $('#search-wrap').classList.toggle('hidden', ui.tab !== 'closed' && ui.tab !== 'contacts');
   $('#search').placeholder = ui.tab === 'contacts' ? 'חיפוש לפי שם, תפקיד או טלפון...' : 'חיפוש...';
 
+  const showRest = ui.tab !== 'cal' && ui.tab !== 'contacts';
+  $('#rest-sw').classList.toggle('hidden', !showRest);
+  $('#rest-sw').querySelectorAll('[data-rest]').forEach(b => b.classList.toggle('on', b.dataset.rest === ui.rest));
+  $('#depts').classList.toggle('hidden', ui.tab === 'cal');
+
+  if (ui.tab !== 'contacts' && ui.dept !== 'all' && !deptsOf(ui.rest).includes(ui.dept)) ui.dept = 'all';
   const items = currentItems(false);
+  const deptList = ui.tab === 'contacts' ? DEPTS : deptsOf(ui.rest);
   // מחלקות
   const counts = {}; for (const it of items) counts[it.dept || '—'] = (counts[it.dept || '—'] || 0) + 1;
   let chips = `<button class="chip ${ui.dept === 'all' ? 'on' : ''}" data-dept="all">הכול <span class="n">${items.length}</span></button>`;
-  for (const d of DEPTS) chips += `<button class="chip ${ui.dept === d ? 'on' : ''}" data-dept="${esc(d)}">${esc(d)}${counts[d] ? ` <span class="n">${counts[d]}</span>` : ''}</button>`;
+  for (const d of deptList) chips += `<button class="chip ${ui.dept === d ? 'on' : ''}" data-dept="${esc(d)}">${esc(d)}${counts[d] ? ` <span class="n">${counts[d]}</span>` : ''}</button>`;
   $('#depts').innerHTML = chips;
 
   // תגים בלשוניות
-  $('#b-open').textContent = db.tasks.filter(t => t.status === 'open').length || '';
-  $('#b-progress').textContent = db.tasks.filter(t => t.status === 'progress').length || '';
+  $('#b-open').textContent = db.tasks.filter(t => inRest(t) && t.status === 'open').length || '';
+  $('#b-progress').textContent = db.tasks.filter(t => inRest(t) && t.status === 'progress').length || '';
   { const tb = $('#btnTemps'); if (tb) tb.classList.toggle('dot-on', db.fridges.length > 0 && fridgesToMeasure().length > 0); }
-  $('#b-routine').textContent = db.routine.filter(r => routineState(r).days <= 0).length || '';
+  $('#b-routine').textContent = db.routine.filter(r => inRest(r) && routineState(r).days <= 0).length || '';
 
   if (ui.tab === 'cal') { $('#main').innerHTML = calendarHtml(); return; }
   if (ui.tab === 'contacts') { $('#main').innerHTML = contactsView(); return; }
@@ -291,7 +324,7 @@ function render() {
   else if (ui.dept === 'all' && ui.tab !== 'closed') {
     const groups = {};
     for (const it of list) (groups[it.dept || '—'] = groups[it.dept || '—'] || []).push(it);
-    for (const d of [...DEPTS, '—']) {
+    for (const d of [...deptList, '—']) {
       if (!groups[d]) continue;
       html += `<div class="group-h"><span>${d === '—' ? 'ללא מחלקה' : esc(d)}</span><span>${groups[d].length}</span></div>`;
       html += groups[d].map(cardHtml).join('');
@@ -302,13 +335,13 @@ function render() {
 function currentItems(applyFilter) {
   let list;
   if (ui.tab === 'routine') {
-    list = db.routine.slice().sort((a, b) => routineDue(a) - routineDue(b));
+    list = db.routine.filter(inRest).sort((a, b) => routineDue(a) - routineDue(b));
   } else if (ui.tab === 'contacts') {
     list = contactsFiltered();
   } else if (ui.tab === 'cal') {
     list = db.tasks.filter(t => t.status !== 'closed' && t.due).concat(db.routine);
   } else {
-    list = db.tasks.filter(t => t.status === ui.tab);
+    list = db.tasks.filter(t => inRest(t) && t.status === ui.tab);
     if (ui.tab === 'closed') {
       list.sort((a, b) => (b.closedAt || 0) - (a.closedAt || 0));
       if (ui.q) {
@@ -321,8 +354,8 @@ function currentItems(applyFilter) {
   return list;
 }
 function focusBox() {
-  const tasks = db.tasks.filter(t => t.status !== 'closed').map(t => ({ s: urgencyScore(t), txt: t.title, sub: `${t.dept || ''} · ${prioName(t.prio)}${t.status === 'progress' ? ' · בטיפול' : ''}` }));
-  const rts = db.routine.filter(r => routineState(r).days <= 0).map(r => ({ s: 22 - routineState(r).days, txt: r.title, sub: `שוטף · ${r.dept || ''} · ${routineState(r).txt}` }));
+  const tasks = db.tasks.filter(t => inRest(t) && t.status !== 'closed').map(t => ({ s: urgencyScore(t), txt: t.title, sub: `${t.dept || ''} · ${prioName(t.prio)}${t.status === 'progress' ? ' · בטיפול' : ''}` }));
+  const rts = db.routine.filter(r => inRest(r) && routineState(r).days <= 0).map(r => ({ s: 22 - routineState(r).days, txt: r.title, sub: `שוטף · ${r.dept || ''} · ${routineState(r).txt}` }));
   const top = tasks.concat(rts).sort((a, b) => b.s - a.s).slice(0, 3);
   if (!top.length) return '';
   return `<div class="focus"><h3>⚡ מה עכשיו – 3 הדברים הכי חשובים</h3><ol>${top.map(x => `<li>${esc(x.txt)} <span>${esc(x.sub)}</span></li>`).join('')}</ol></div>`;
@@ -398,7 +431,7 @@ function addDays(ts, n) { const d = new Date(ts); d.setDate(d.getDate() + n); re
 function calEvents(from, to) {
   const map = {}, today = startOfDay(Date.now());
   const put = (ts, ev) => { const k = startOfDay(ts); if (k < from || k > to) return; (map[k] = map[k] || []).push(ev); };
-  const okDept = x => ui.dept === 'all' || x.dept === ui.dept;
+  const okDept = () => true; // היומן מציג את שתי המסעדות
   for (const t of db.tasks) {
     if (t.status === 'closed' || !okDept(t)) continue;
     if (t.due) put(t.due, { kind: 'due', item: t, ts: t.due, over: startOfDay(t.due) < today });
@@ -442,7 +475,7 @@ function calendarHtml() {
       : `<span class="tag ${e.over ? 'over' : ''}">↻ שוטף${e.over ? ' – לביצוע' : ''}</span>`;
     const open = e.kind === 'routine' ? `data-open-r="${it.id}"` : `data-open="${it.id}"`;
     return `<div class="card" ${open}>${e.kind !== 'routine' ? `<div class="bar pr${it.prio}"></div>` : ''}<div class="body"><div class="t">${esc(it.title)}</div>
-      <div class="meta">${label}<span class="tag">${esc(it.dept || '')}</span>${e.kind !== 'routine' && it.status === 'progress' ? '<span>בטיפול</span>' : ''}</div></div></div>`;
+      <div class="meta">${label}<span class="tag rest-tag">${esc(restName(it.rest))}</span><span class="tag">${esc(it.dept || '')}</span>${e.kind !== 'routine' && it.status === 'progress' ? '<span>בטיפול</span>' : ''}</div></div></div>`;
   }).join('');
 
   return `<div class="cal">
@@ -463,12 +496,13 @@ function quickAdd(prefillDue) {
   if (ui.tab === 'routine') return routineEdit(null);
   if (ui.tab === 'contacts') return contactEdit(null);
   if (ui.tab === 'cal' && prefillDue === undefined) prefillDue = ui.calDay;
-  sheetState = { kind: 'quick', manual: {}, dept: ui.dept !== 'all' ? ui.dept : null, type: null, prio: 3, auto: {}, photos: [] };
+  sheetState = { kind: 'quick', manual: {}, rest: ui.tab === 'cal' ? ui.rest : ui.rest, dept: ui.dept !== 'all' && ui.tab !== 'cal' ? ui.dept : null, type: null, prio: 3, auto: {}, photos: [] };
   if (sheetState.dept) sheetState.manual.dept = true;
   openSheet(`<h2>תקלה / משימה חדשה</h2>
     <input id="q-title" class="field" placeholder="למשל: מקרר בר לא מקרר" autocomplete="off" enterkeyhint="done">
     <textarea id="q-desc" class="desc-in" rows="2" placeholder="📝 תיאור התקלה (לא חובה)"></textarea>
     <div id="q-rep"></div>
+    <label>מסעדה</label><div id="q-rest"></div>
     <label>מחלקה</label><div id="q-dept"></div>
     <label>סוג</label><div id="q-type"></div>
     <label>עדיפות</label><div id="q-prio"></div>
@@ -487,15 +521,19 @@ function quickAdd(prefillDue) {
 }
 function quickRefresh() {
   const s = sheetState, text = $('#q-title') ? $('#q-title').value : '';
-  const g = guess(text);
+  const gr = guessRest(text);
+  if (!s.manual.rest && gr) s.rest = gr;
+  if (s.manual.dept && !deptsOf(s.rest).includes(s.dept)) s.manual.dept = false;
+  const g = guess(text, s.rest);
   s.auto = g;
   if (!s.manual.dept) s.dept = g.dept || DEFAULT_DEPT;
   if (!s.manual.type) s.type = g.type || (text.trim() ? 'task' : null);
   if (!s.manual.prio) s.prio = g.prio;
-  const sim = text.trim().length > 2 && s.type !== 'task' ? findSimilar(text, s.dept) : [];
+  const sim = text.trim().length > 2 && s.type !== 'task' ? findSimilar(text, s.dept, null, s.rest) : [];
   if (sim.length && !s.manual.prio && s.prio > 2) s.prio = 2;
   s.sim = sim;
-  $('#q-dept').innerHTML = pickChips('dept', DEPTS, s.dept, s.manual.dept ? null : g.dept);
+  $('#q-rest').innerHTML = pickChips('rest', RESTS.map(r => ({ v: r.id, name: r.name })), s.rest, !s.manual.rest && gr ? gr : null);
+  $('#q-dept').innerHTML = pickChips('dept', deptsOf(s.rest), s.dept, s.manual.dept ? null : g.dept);
   $('#q-type').innerHTML = pickChips('type', TYPES, s.type, s.manual.type ? null : g.type);
   $('#q-prio').innerHTML = pickChips('prio', PRIOS, s.prio, !s.manual.prio && (g.prio === 1 || sim.length) ? s.prio : null);
   $('#q-rep').innerHTML = repeatBox(sim);
@@ -560,10 +598,12 @@ function quickSave() {
   };
   s.saved = true;
 
-  const sim = t.type !== 'task' ? findSimilar(title, t.dept) : [];
+  t.rest = s.rest;
+  const sim = t.type !== 'task' ? findSimilar(title, t.dept, null, t.rest) : [];
   if (sim.length) { t.related = sim.map(x => x.id); t.repeats = sim.length; }
   db.tasks.push(t);
   if (t.dept) learnFrom(title, t.dept, t.type);
+  if (t.rest !== ui.rest && ui.tab !== 'cal') setRest(t.rest);
   save(); closeSheet();
   if (ui.tab !== 'open' && ui.tab !== 'cal') ui.tab = 'open';
   render(); toast(sim.length ? 'נשמר · סומן כתקלה חוזרת' : 'נשמר');
@@ -572,8 +612,8 @@ function quickSave() {
 /* --- פרטי משימה --- */
 function taskDetail(id) {
   const t = db.tasks.find(x => x.id === id); if (!t) return;
-  sheetState = { kind: 'detail', id, dept: t.dept, type: t.type, prio: t.prio };
-  const rel = findSimilar(t.title, t.dept, t.id);
+  sheetState = { kind: 'detail', id, rest: t.rest || 'ramah', dept: t.dept, type: t.type, prio: t.prio };
+  const rel = findSimilar(t.title, t.dept, t.id, t.rest);
   let actions = '';
   if (t.status === 'open') actions = `<button class="btn primary" data-x="start">בטיפול</button><button class="btn ok" data-x="close">סגור</button>`;
   else if (t.status === 'progress') actions = `<button class="btn ok" data-x="close">סגור</button>`;
@@ -583,7 +623,8 @@ function taskDetail(id) {
     <input id="d-title" class="field" value="${esc(t.title)}">
     ${t.status !== 'closed' ? repeatBox(rel) : ''}
     <div class="row">${actions}</div>
-    <label>מחלקה</label>${pickChips('dept', DEPTS, t.dept)}
+    <label>מסעדה</label>${pickChips('rest', RESTS.map(r => ({ v: r.id, name: r.name })), sheetState.rest)}
+    <label>מחלקה</label><div id="pick-dept">${pickChips('dept', deptsOf(sheetState.rest), t.dept)}</div>
     <label>סוג</label>${pickChips('type', TYPES, t.type)}
     <label>עדיפות</label>${pickChips('prio', PRIOS, t.prio)}
     <label>📅 תאריך יעד (לא חובה)</label>
@@ -607,7 +648,7 @@ function detailCollect(t) {
   t.due = parseDate($('#d-due').value);
   if ($('#d-contact')) t.contactId = $('#d-contact').value || null;
   const changedClass = t.dept !== sheetState.dept || t.type !== sheetState.type;
-  t.dept = sheetState.dept; t.type = sheetState.type; t.prio = sheetState.prio;
+  t.rest = sheetState.rest; t.dept = sheetState.dept; t.type = sheetState.type; t.prio = sheetState.prio;
   if ($('#d-treat')) t.treatment = $('#d-treat').value.trim();
   if (changedClass && t.dept) learnFrom(t.title, t.dept, t.type);
 }
@@ -622,7 +663,7 @@ function addLog(t, text) { (t.log = t.log || []).push({ t: Date.now(), text }); 
 /* --- סגירת משימה עם תיעוד הטיפול --- */
 function closeFlow(id) {
   const t = db.tasks.find(x => x.id === id); if (!t) return;
-  const prev = lastTreated(findSimilar(t.title, t.dept, t.id));
+  const prev = lastTreated(findSimilar(t.title, t.dept, t.id, t.rest));
   sheetState = { kind: 'close', id };
   openSheet(`<h2>סגירה: ${esc(t.title)}</h2>
     <label>מה עשית / איך טופל? (יוצג בפעם הבאה שהתקלה תחזור)</label>
@@ -637,11 +678,12 @@ function closeFlow(id) {
 /* --- טיפול שוטף --- */
 function routineEdit(id) {
   const r = id ? db.routine.find(x => x.id === id) : null;
-  sheetState = { kind: 'routine', id, dept: r ? r.dept : (ui.dept !== 'all' ? ui.dept : DEFAULT_DEPT), every: r ? r.every : 7 };
+  sheetState = { kind: 'routine', id, rest: r ? (r.rest || 'ramah') : ui.rest, dept: r ? r.dept : (ui.dept !== 'all' ? ui.dept : DEFAULT_DEPT), every: r ? r.every : 7 };
   const presets = [{ v: 1, name: 'כל יום' }, { v: 7, name: 'שבועי' }, { v: 14, name: 'דו־שבועי' }, { v: 30, name: 'חודשי' }, { v: 90, name: 'רבעוני' }, { v: 180, name: 'חצי שנתי' }];
   openSheet(`<h2>${r ? 'טיפול שוטף' : 'טיפול שוטף חדש'}</h2>
     <input id="r-title" class="field" placeholder="למשל: ניקוי מסנני מנדף" value="${r ? esc(r.title) : ''}" autocomplete="off">
-    <label>מחלקה</label>${pickChips('dept', DEPTS, sheetState.dept)}
+    <label>מסעדה</label>${pickChips('rest', RESTS.map(r => ({ v: r.id, name: r.name })), sheetState.rest)}
+    <label>מחלקה</label><div id="pick-dept">${pickChips('dept', deptsOf(sheetState.rest), sheetState.dept)}</div>
     <label>תדירות</label>${pickChips('every', presets, sheetState.every)}
     <div class="row mt8 center"><span class="note">או כל</span><input id="r-every" type="number" inputmode="numeric" min="1" class="field num" value="${sheetState.every}"><span class="note">ימים</span></div>
     ${r ? `<div class="kv">${r.last ? `בוצע לאחרונה: ${fmtD.format(r.last)} · הבא: ${fmtD.format(routineDue(r))}` : 'עוד לא בוצע'}</div>
@@ -1014,15 +1056,16 @@ function similarPair(a, b) {
   const sameDept = !a.dept || !b.dept || a.dept === b.dept;
   return inter >= 1 && ((sameDept && score >= 0.5) || (inter >= 2 && score >= 0.8));
 }
-function statsSheet(offset) {
-  offset = offset || 0;
-  sheetState = { kind: 'stats', offset };
+function statsSheet(offset, rest) {
+  offset = offset || 0; rest = rest || ui.rest;
+  sheetState = { kind: 'stats', offset, rest };
+  const mine = x => (x.rest || 'ramah') === rest;
   const now = new Date();
   const from = new Date(now.getFullYear(), now.getMonth() + offset, 1).getTime();
   const to = new Date(now.getFullYear(), now.getMonth() + offset + 1, 1).getTime() - 1;
   const inM = ts => ts && ts >= from && ts <= to;
-  const opened = db.tasks.filter(t => inM(t.createdAt));
-  const closed = db.tasks.filter(t => t.status === 'closed' && inM(t.closedAt));
+  const opened = db.tasks.filter(t => mine(t) && inM(t.createdAt));
+  const closed = db.tasks.filter(t => mine(t) && t.status === 'closed' && inM(t.closedAt));
   const faults = opened.filter(t => t.type !== 'task');
   const durs = closed.map(t => t.closedAt - t.createdAt).filter(d => d >= 0);
   const avg = durs.length ? durs.reduce((a, b) => a + b, 0) / durs.length : 0;
@@ -1034,7 +1077,7 @@ function statsSheet(offset) {
   for (const t of opened) { byDept[t.dept || DEFAULT_DEPT] = (byDept[t.dept || DEFAULT_DEPT] || 0) + 1; byType[typeName(t.type)] = (byType[typeName(t.type)] || 0) + 1; }
 
   // מכשירים / תקלות שחוזרות – קיבוץ לפי דמיון
-  const allFaults = db.tasks.filter(t => t.type !== 'task').sort((a, b) => a.createdAt - b.createdAt);
+  const allFaults = db.tasks.filter(t => mine(t) && t.type !== 'task').sort((a, b) => a.createdAt - b.createdAt);
   const clusters = [];
   for (const t of allFaults) {
     const c = clusters.find(c => similarPair(c.rep, t));
@@ -1043,26 +1086,27 @@ function statsSheet(offset) {
   const hot = clusters.map(c => ({ c, m: c.items.filter(t => inM(t.createdAt)).length }))
     .filter(x => x.m > 0 && x.c.items.length > 1).sort((a, b) => b.m - a.m || b.c.items.length - a.c.items.length).slice(0, 6);
 
-  const routineDoneN = db.routine.reduce((s, r) => s + (r.history || []).filter(h => inM(h.t)).length, 0);
+  const routineDoneN = db.routine.filter(mine).reduce((s, r) => s + (r.history || []).filter(h => inM(h.t)).length, 0);
   const tempsM = db.temps.filter(r => inM(r.t));
   const tempsBad = tempsM.filter(r => { const f = db.fridges.find(x => x.id === r.f); return f && !tempOk(f, r.v); }).length;
   const byContact = {};
-  for (const t of db.tasks) if (t.contactId && (inM(t.closedAt) || inM(t.createdAt))) { const n = contactName(t.contactId); if (n) byContact[n] = (byContact[n] || 0) + 1; }
+  for (const t of db.tasks) if (mine(t) && t.contactId && (inM(t.closedAt) || inM(t.createdAt))) { const n = contactName(t.contactId); if (n) byContact[n] = (byContact[n] || 0) + 1; }
 
   const monthName = fmtMonth.format(from);
   openSheet(`<div class="cal-nav stats-nav"><button class="r-btn" data-stats="${offset - 1}" aria-label="חודש קודם">›</button><h2 class="m0">📊 ${monthName}</h2>
       <button class="r-btn" data-stats="${offset + 1}" ${offset >= 0 ? 'disabled' : ''} aria-label="חודש הבא">‹</button></div>
+    <div class="seg mt8">${RESTS.map(r => `<button class="seg-b ${r.id === rest ? 'on' : ''}" data-srest="${r.id}">${esc(r.name)}</button>`).join('')}</div>
     <div class="tiles">
       <div class="tile"><b>${opened.length}</b><span>נפתחו</span><small>${faults.length} תקלות</small></div>
       <div class="tile"><b>${closed.length}</b><span>נסגרו</span></div>
       <div class="tile"><b>${avgTxt}</b><span>זמן טיפול ממוצע</span></div>
-      <div class="tile"><b>${db.tasks.filter(t => t.status !== 'closed').length}</b><span>פתוחות עכשיו</span></div>
+      <div class="tile"><b>${db.tasks.filter(t => mine(t) && t.status !== 'closed').length}</b><span>פתוחות עכשיו</span></div>
     </div>
     ${hot.length ? `<label>🔁 תקלות שחוזרות – הכי בעייתי</label><div class="hist">${hot.map(x => `<div class="h"><b>${esc(x.c.items[x.c.items.length - 1].title)}</b><small>${x.m} החודש · ${x.c.items.length} בסך הכול · ${esc(x.c.rep.dept || '')}</small></div>`).join('')}</div>` : ''}
     ${opened.length ? `<label>לפי מחלקה</label>${bars(byDept, opened.length)}<label>לפי סוג</label>${bars(byType, opened.length)}` : '<div class="empty small">לא נפתחו משימות בחודש הזה</div>'}
     ${Object.keys(byContact).length ? `<label>👷 טכנאים וספקים שטיפלו</label>${bars(byContact, Math.max(...Object.values(byContact)))}` : ''}
     <label>טיפול שוטף</label>
-    <div class="kv">↻ ${routineDoneN} טיפולים שוטפים בוצעו${db.routine.length ? ` · ${db.routine.filter(r => routineState(r).days < 0).length} באיחור כרגע` : ''}</div>
+    <div class="kv">↻ ${routineDoneN} טיפולים שוטפים בוצעו${db.routine.some(mine) ? ` · ${db.routine.filter(r => mine(r) && routineState(r).days < 0).length} באיחור כרגע` : ''}</div>
     <div class="row"><button class="btn" data-x="cancel">סגור</button></div>`);
   document.querySelectorAll('#sheet [data-w]').forEach(i => { i.style.width = Math.max(3, Number(i.dataset.w)) + '%'; });
 }
@@ -1091,7 +1135,8 @@ document.addEventListener('click', e => {
     el.parentNode.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c === el));
     $('#fe-min').value = k.min; $('#fe-max').value = k.max; return;
   }
-  if (d.stats !== undefined) { if (!el.disabled) statsSheet(Number(d.stats)); return; }
+  if (d.stats !== undefined) { if (!el.disabled) statsSheet(Number(d.stats), sheetState.rest); return; }
+  if (d.srest) return statsSheet(sheetState.offset, d.srest);
   if (d.tfault) {
     const r = db.temps.find(x => x.id === d.tfault); const f = r && db.fridges.find(x => x.id === r.f); if (!f) return;
     const t = { id: uid(), title: `${f.name} – טמפרטורה ${r.v}° (מחוץ לטווח)`, notes: `טווח תקין: ${f.min}° עד ${f.max}°. נמדד ${fmtDT.format(r.t)}.`,
@@ -1196,6 +1241,7 @@ document.addEventListener('click', e => {
     return render();
   }
   if (el.dataset.tab) { if (ui.tab !== el.dataset.tab) { ui.q = ''; $('#search').value = ''; } ui.tab = el.dataset.tab; ui.dept = ui.dept; window.scrollTo(0, 0); return render(); }
+  if (el.dataset.rest && el.closest('#rest-sw')) { setRest(el.dataset.rest); window.scrollTo(0, 0); return render(); }
   if (el.dataset.dept) { ui.dept = el.dataset.dept; return render(); }
 
   // פעולות מהירות על כרטיס
@@ -1224,6 +1270,10 @@ document.addEventListener('click', e => {
     sheetState[name] = v;
     if (sheetState.kind === 'quick') { sheetState.manual[name] = true; return quickRefresh(); }
     pick.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c.dataset.val === String(v)));
+    if (name === 'rest' && $('#pick-dept')) {
+      if (!deptsOf(v).includes(sheetState.dept)) sheetState.dept = DEFAULT_DEPT;
+      $('#pick-dept').innerHTML = pickChips('dept', deptsOf(v), sheetState.dept);
+    }
     if (name === 'every' && $('#r-every')) $('#r-every').value = v;
     return;
   }
@@ -1264,8 +1314,8 @@ document.addEventListener('click', e => {
     case 'r-save': {
       const title = $('#r-title').value.trim(); if (!title) return $('#r-title').focus();
       const every = Math.max(1, Number($('#r-every').value) || s.every || 7);
-      if (s.id) Object.assign(db.routine.find(y => y.id === s.id), { title, dept: s.dept, every });
-      else db.routine.push({ id: uid(), title, dept: s.dept, every, last: null, createdAt: Date.now(), history: [] });
+      if (s.id) Object.assign(db.routine.find(y => y.id === s.id), { title, rest: s.rest, dept: s.dept, every });
+      else db.routine.push({ id: uid(), title, rest: s.rest, dept: s.dept, every, last: null, createdAt: Date.now(), history: [] });
       save(); closeSheet(); render(); return toast('נשמר');
     }
     case 'r-del':

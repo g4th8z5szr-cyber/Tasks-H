@@ -241,3 +241,9 @@ select.field { -webkit-appearance: none; appearance: none; flex: 1; min-width: 0
 
 .c-card { align-items: center; cursor: pointer; }
 .c-card .meta span[dir=ltr] { unicode-bidi: isolate; }
+
+/* מתג מסעדות */
+.rest-sw { margin: 0 0 8px; }
+.seg-b.on { background: var(--accent); }
+.rest-sw .seg-b { padding: 8px 4px; font-size: 16px; }
+.tag.rest-tag { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
