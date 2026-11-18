@@ -236,3 +236,5 @@ select.field { -webkit-appearance: none; appearance: none; flex: 1; min-width: 0
 
 .grow { flex: 1; min-width: 0; display: flex; }
 .grow .note { padding: 4px 0; }
+
+.tip { background: var(--accent-soft); color: var(--text); border-radius: 12px; padding: 10px 12px; font-size: 14px; line-height: 1.5; margin-bottom: 4px; }

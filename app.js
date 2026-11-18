@@ -878,8 +878,11 @@ function contactEdit(id) {
   sheetState = { kind: 'contact', id, dept: c ? c.dept : null };
   const jobs = c ? db.tasks.filter(t => t.contactId === c.id).sort((a, b) => b.createdAt - a.createdAt) : [];
   openSheet(`<h2>${c ? 'איש קשר' : 'איש קשר חדש'}</h2>
-    <label>שם</label><input id="ce-name" class="field" value="${c ? esc(c.name) : ''}" placeholder="למשל: משה קירור" autocomplete="off">
-    <label>טלפון</label><input id="ce-phone" class="field" type="tel" inputmode="tel" value="${c ? esc(c.phone || '') : ''}" placeholder="050-0000000" autocomplete="off">
+    ${c ? '' : '<div class="tip">💡 לוחצים על שדה השם, ומעל המקלדת בוחרים <b>"מילוי אוטומטי"</b> ואז <b>"איש קשר"</b>. השם והטלפון יתמלאו מאנשי הקשר שלכם.</div>'}
+    <form id="ce-form" autocomplete="on">
+    <label>שם</label><input id="ce-name" name="name" class="field" value="${c ? esc(c.name) : ''}" placeholder="למשל: משה קירור" autocomplete="name">
+    <label>טלפון</label><input id="ce-phone" name="tel" class="field" type="tel" inputmode="tel" value="${c ? esc(c.phone || '') : ''}" placeholder="050-0000000" autocomplete="tel">
+    </form>
     <label>תפקיד</label><input id="ce-role" class="field" value="${c ? esc(c.role || '') : ''}" placeholder="למשל: טכנאי קירור" autocomplete="off">
     <div class="chips pick-roles">${ROLES.map(r => `<button class="chip" data-role="${esc(r)}">${esc(r)}</button>`).join('')}</div>
     <label>מחלקה (לא חובה)</label>${pickChips('dept', DEPTS, sheetState.dept)}
@@ -1272,6 +1275,7 @@ document.addEventListener('input', e => {
     document.querySelectorAll('[data-pick="every"] .chip').forEach(c => c.classList.toggle('on', c.dataset.val === String(sheetState.every)));
   }
 });
+document.addEventListener('submit', e => e.preventDefault());
 document.addEventListener('keydown', e => {
   if (e.key !== 'Enter') return;
   if (e.target.id === 'q-title') { e.preventDefault(); quickSave(); }
