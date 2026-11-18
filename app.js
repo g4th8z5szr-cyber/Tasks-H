@@ -237,7 +237,7 @@ function toast(msg) {
 
 /* ---------- מצב ממשק ---------- */
 const ui = { tab: 'open', dept: 'all', q: '', calMonth: null, calDay: null };
-const TITLES = { open: 'משימות פתוחות', progress: 'משימות בטיפול', closed: 'משימות סגורות', routine: 'טיפול שוטף', cal: 'יומן' };
+const TITLES = { open: 'משימות פתוחות', progress: 'משימות בטיפול', closed: 'משימות סגורות', routine: 'טיפול שוטף', cal: 'יומן', contacts: 'טכנאים וספקים' };
 
 function taskSort(a, b) {
   if (a.prio !== b.prio) return a.prio - b.prio;
@@ -266,7 +266,8 @@ function urgencyScore(t) {
 function render() {
   $('#title').textContent = TITLES[ui.tab];
   document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === ui.tab));
-  $('#search-wrap').classList.toggle('hidden', ui.tab !== 'closed');
+  $('#search-wrap').classList.toggle('hidden', ui.tab !== 'closed' && ui.tab !== 'contacts');
+  $('#search').placeholder = ui.tab === 'contacts' ? 'חיפוש לפי שם, תפקיד או טלפון...' : 'חיפוש...';
 
   const items = currentItems(false);
   // מחלקות
@@ -282,6 +283,7 @@ function render() {
   $('#b-routine').textContent = db.routine.filter(r => routineState(r).days <= 0).length || '';
 
   if (ui.tab === 'cal') { $('#main').innerHTML = calendarHtml(); return; }
+  if (ui.tab === 'contacts') { $('#main').innerHTML = contactsView(); return; }
   const list = currentItems(true);
   let html = '';
   if (ui.tab === 'open' && ui.dept === 'all') html += focusBox();
@@ -301,6 +303,8 @@ function currentItems(applyFilter) {
   let list;
   if (ui.tab === 'routine') {
     list = db.routine.slice().sort((a, b) => routineDue(a) - routineDue(b));
+  } else if (ui.tab === 'contacts') {
+    list = contactsFiltered();
   } else if (ui.tab === 'cal') {
     list = db.tasks.filter(t => t.status !== 'closed' && t.due).concat(db.routine);
   } else {
@@ -319,9 +323,7 @@ function currentItems(applyFilter) {
 function focusBox() {
   const tasks = db.tasks.filter(t => t.status !== 'closed').map(t => ({ s: urgencyScore(t), txt: t.title, sub: `${t.dept || ''} · ${prioName(t.prio)}${t.status === 'progress' ? ' · בטיפול' : ''}` }));
   const rts = db.routine.filter(r => routineState(r).days <= 0).map(r => ({ s: 22 - routineState(r).days, txt: r.title, sub: `שוטף · ${r.dept || ''} · ${routineState(r).txt}` }));
-  const miss = fridgesToMeasure();
-  const tm = miss.length && new Date().getHours() >= 9 ? [{ s: 18, txt: `מדידת טמפרטורות – ${miss.length} ${miss.length === 1 ? 'מקרר' : 'מקררים'}`, sub: 'עוד לא נמדדו היום' }] : [];
-  const top = tasks.concat(rts, tm).sort((a, b) => b.s - a.s).slice(0, 3);
+  const top = tasks.concat(rts).sort((a, b) => b.s - a.s).slice(0, 3);
   if (!top.length) return '';
   return `<div class="focus"><h3>⚡ מה עכשיו – 3 הדברים הכי חשובים</h3><ol>${top.map(x => `<li>${esc(x.txt)} <span>${esc(x.sub)}</span></li>`).join('')}</ol></div>`;
 }
@@ -459,6 +461,7 @@ function calendarHtml() {
 /* --- הוספה מהירה --- */
 function quickAdd(prefillDue) {
   if (ui.tab === 'routine') return routineEdit(null);
+  if (ui.tab === 'contacts') return contactEdit(null);
   if (ui.tab === 'cal' && prefillDue === undefined) prefillDue = ui.calDay;
   sheetState = { kind: 'quick', manual: {}, dept: ui.dept !== 'all' ? ui.dept : null, type: null, prio: 3, auto: {}, photos: [] };
   if (sheetState.dept) sheetState.manual.dept = true;
@@ -665,7 +668,7 @@ function settings() {
   sheetState = { kind: 'settings' };
   const n = db.tasks.length, c = db.tasks.filter(t => t.status === 'closed').length;
   openSheet(`<h2>הגדרות וגיבוי</h2>
-    <div class="kv">סה״כ ${n} משימות (${c} סגורות) · ${db.routine.length} טיפולים שוטפים · ${db.contacts.length} אנשי קשר · ${db.fridges.length} מקררים</div>
+    <div class="kv">סה״כ ${n} משימות (${c} סגורות) · ${db.routine.length} טיפולים שוטפים · ${db.contacts.length} אנשי קשר</div>
     <div class="set-sec"><label>גיבוי</label>
       <p class="note">הנתונים שמורים רק בטלפון הזה. כדאי לייצא גיבוי פעם בשבוע ולשמור אותו ב"קבצים" (אפשר לבחור "On My iPhone"). הגיבוי כולל גם את התמונות.</p>
       <div class="row"><button class="btn primary" data-x="export">ייצוא גיבוי</button><button class="btn" data-x="import">שחזור מגיבוי</button></div>
@@ -818,6 +821,25 @@ function contactSelect(id, selected) {
     .map(c => `<option value="${c.id}" ${c.id === selected ? 'selected' : ''}>${esc(c.name)}${c.role ? ' – ' + esc(c.role) : ''}</option>`).join('');
   return `<select id="${id}" class="field"><option value="">— ללא —</option>${opts}</select>`;
 }
+function contactsFiltered() {
+  const nq = norm(ui.q || '');
+  return db.contacts.filter(c => !nq || norm(`${c.name} ${c.role} ${c.dept} ${c.notes} ${c.phone}`).includes(nq));
+}
+function contactsView() {
+  let list = contactsFiltered();
+  if (ui.dept !== 'all') list = list.filter(c => c.dept === ui.dept);
+  if (!list.length) return `<div class="empty">${db.contacts.length ? 'לא נמצאו אנשי קשר' : 'עוד אין טכנאים וספקים<br>לחצו על + כדי להוסיף, ותוכלו לחייג אליהם בלחיצה'}</div>`;
+  const groups = {};
+  for (const c of list) (groups[c.role || 'ללא תפקיד'] = groups[c.role || 'ללא תפקיד'] || []).push(c);
+  return Object.keys(groups).sort((a, b) => a === 'ללא תפקיד' ? 1 : b === 'ללא תפקיד' ? -1 : a.localeCompare(b, 'he')).map(role => {
+    const rows = groups[role].sort((a, b) => a.name.localeCompare(b.name, 'he')).map(c => {
+      const jobs = db.tasks.filter(t => t.contactId === c.id).length;
+      return `<div class="card c-card" data-cedit="${c.id}"><div class="body"><div class="t">${esc(c.name)}</div>
+        <div class="meta">${c.phone ? `<span dir="ltr">${esc(c.phone)}</span>` : ''}${c.dept ? `<span class="tag">${esc(c.dept)}</span>` : ''}${jobs ? `<span>${jobs} טיפולים</span>` : ''}</div></div>${callBtn(c)}</div>`;
+    }).join('');
+    return `<div class="group-h"><span>${esc(role)}</span><span>${groups[role].length}</span></div>${rows}`;
+  }).join('');
+}
 function contactsSheet(q) {
   sheetState = { kind: 'contacts' };
   const nq = norm(q || '');
@@ -869,7 +891,7 @@ function importContacts(list) {
   }
   save();
   if (added === 1) { toast('נוסף – אפשר לבחור תפקיד ומחלקה'); return contactEdit(lastId); }
-  contactsSheet(); toast(added ? `נוספו ${added} אנשי קשר` : 'אנשי הקשר כבר קיימים ברשימה');
+  closeSheet(); render(); toast(added ? `נוספו ${added} אנשי קשר` : 'אנשי הקשר כבר קיימים ברשימה');
 }
 function contactEdit(id) {
   const c = id ? db.contacts.find(x => x.id === id) : null;
@@ -1039,9 +1061,8 @@ function statsSheet(offset) {
     ${hot.length ? `<label>🔁 תקלות שחוזרות – הכי בעייתי</label><div class="hist">${hot.map(x => `<div class="h"><b>${esc(x.c.items[x.c.items.length - 1].title)}</b><small>${x.m} החודש · ${x.c.items.length} בסך הכול · ${esc(x.c.rep.dept || '')}</small></div>`).join('')}</div>` : ''}
     ${opened.length ? `<label>לפי מחלקה</label>${bars(byDept, opened.length)}<label>לפי סוג</label>${bars(byType, opened.length)}` : '<div class="empty small">לא נפתחו משימות בחודש הזה</div>'}
     ${Object.keys(byContact).length ? `<label>👷 טכנאים וספקים שטיפלו</label>${bars(byContact, Math.max(...Object.values(byContact)))}` : ''}
-    <label>טיפול שוטף וטמפרטורות</label>
-    <div class="kv">↻ ${routineDoneN} טיפולים שוטפים בוצעו${db.routine.length ? ` · ${db.routine.filter(r => routineState(r).days < 0).length} באיחור כרגע` : ''}<br>
-      🌡️ ${tempsM.length} מדידות${tempsBad ? ` · <b class="r-over">${tempsBad} חריגות</b>` : tempsM.length ? ' · הכול תקין ✓' : ''}</div>
+    <label>טיפול שוטף</label>
+    <div class="kv">↻ ${routineDoneN} טיפולים שוטפים בוצעו${db.routine.length ? ` · ${db.routine.filter(r => routineState(r).days < 0).length} באיחור כרגע` : ''}</div>
     <div class="row"><button class="btn" data-x="cancel">סגור</button></div>`);
   document.querySelectorAll('#sheet [data-w]').forEach(i => { i.style.width = Math.max(3, Number(i.dataset.w)) + '%'; });
 }
@@ -1051,7 +1072,7 @@ document.addEventListener('click', e => {
   if (e.target.closest('a.call')) return; // חיוג – לא לפתוח עריכה
   const el = e.target.closest('button, [data-ph], [data-cedit], [data-fhist]'); if (!el) return;
   const d = el.dataset;
-  if (el.id === 'btnContacts') return contactsSheet();
+  if (el.id === 'btnContacts') { ui.tab = 'contacts'; ui.q = ''; $('#search').value = ''; window.scrollTo(0, 0); return render(); }
   if (el.id === 'btnTemps') return tempsSheet();
   if (el.id === 'btnStats') return statsSheet(0);
   if (d.ph) return showPhoto(d.ph);
@@ -1089,19 +1110,19 @@ document.addEventListener('click', e => {
         importContacts(res.map(r => ({ name: (r.name || [])[0] || '', phone: (r.tel || [])[0] || '' })));
       }).catch(() => toast('לא הצלחתי לפתוח את אנשי הקשר'));
       return;
-    case 'c-back': return contactsSheet();
+    case 'c-back': closeSheet(); return render();
     case 'ce-save': {
       const name = $('#ce-name').value.trim(); if (!name) return $('#ce-name').focus();
       const data = { name, phone: $('#ce-phone').value.trim(), role: $('#ce-role').value.trim(), dept: sheetState.dept || null, notes: $('#ce-notes').value.trim() };
       if (sheetState.id) Object.assign(db.contacts.find(x => x.id === sheetState.id), data);
       else db.contacts.push({ id: uid(), createdAt: Date.now(), ...data });
-      save(); toast('נשמר'); return contactsSheet();
+      save(); closeSheet(); render(); return toast('נשמר');
     }
     case 'ce-del':
       if (!confirm('למחוק את איש הקשר?')) return;
       db.contacts = db.contacts.filter(x => x.id !== sheetState.id);
       for (const t of db.tasks) if (t.contactId === sheetState.id) t.contactId = null;
-      save(); return contactsSheet();
+      save(); closeSheet(); return render();
     case 'f-new': return fridgeEdit(null);
     case 't-back': return tempsSheet();
     case 'fe-save': {
@@ -1174,7 +1195,7 @@ document.addEventListener('click', e => {
     else { ui.calMonth = new Date(m.getFullYear(), m.getMonth() + n, 1).getTime(); ui.calDay = ui.calMonth; }
     return render();
   }
-  if (el.dataset.tab) { ui.tab = el.dataset.tab; ui.dept = ui.dept; window.scrollTo(0, 0); return render(); }
+  if (el.dataset.tab) { if (ui.tab !== el.dataset.tab) { ui.q = ''; $('#search').value = ''; } ui.tab = el.dataset.tab; ui.dept = ui.dept; window.scrollTo(0, 0); return render(); }
   if (el.dataset.dept) { ui.dept = el.dataset.dept; return render(); }
 
   // פעולות מהירות על כרטיס
