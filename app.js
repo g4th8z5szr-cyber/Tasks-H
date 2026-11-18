@@ -830,8 +830,6 @@ function contactsSheet(q) {
       return `<div class="c-row" data-cedit="${c.id}"><div class="body"><b>${esc(c.name)}</b>
         <small>${esc(c.role || '')}${c.dept ? ' · ' + esc(c.dept) : ''}${jobs ? ` · ${jobs} טיפולים` : ''}</small></div>${callBtn(c)}</div>`;
     }).join('') || '<div class="empty small">עוד אין אנשי קשר.<br>הוסיפו טכנאים וספקים כדי לחייג אליהם בלחיצה.</div>'}</div>
-    <div class="row">${'contacts' in navigator && navigator.contacts && navigator.contacts.select ? '<button class="btn" data-x="c-pick">📱 מאנשי הקשר</button>' : ''}<button class="btn" data-x="c-vcf">📄 ייבוא מקובץ</button></div>
-    <input id="vcf-input" type="file" accept=".vcf,text/vcard,text/x-vcard" multiple class="hidden">
     <div class="row"><button class="btn" data-x="cancel">סגור</button><button class="btn primary" data-x="c-new">+ איש קשר חדש</button></div>`);
 }
 /* ייבוא אנשי קשר – הכול מקומי, בלי רשת */
@@ -878,7 +876,6 @@ function contactEdit(id) {
   sheetState = { kind: 'contact', id, dept: c ? c.dept : null };
   const jobs = c ? db.tasks.filter(t => t.contactId === c.id).sort((a, b) => b.createdAt - a.createdAt) : [];
   openSheet(`<h2>${c ? 'איש קשר' : 'איש קשר חדש'}</h2>
-    ${c ? '' : '<div class="tip">💡 לוחצים על שדה השם, ומעל המקלדת בוחרים <b>"מילוי אוטומטי"</b> ואז <b>"איש קשר"</b>. השם והטלפון יתמלאו מאנשי הקשר שלכם.</div>'}
     <form id="ce-form" autocomplete="on">
     <label>שם</label><input id="ce-name" name="name" class="field" value="${c ? esc(c.name) : ''}" placeholder="למשל: משה קירור" autocomplete="name">
     <label>טלפון</label><input id="ce-phone" name="tel" class="field" type="tel" inputmode="tel" value="${c ? esc(c.phone || '') : ''}" placeholder="050-0000000" autocomplete="tel">
