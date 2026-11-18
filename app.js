@@ -527,7 +527,7 @@ function taskDetail(id) {
   sheetState = { kind: 'detail', id, dept: t.dept, type: t.type, prio: t.prio };
   const rel = findSimilar(t.title, t.dept, t.id);
   let actions = '';
-  if (t.status === 'open') actions = `<button class="btn primary" data-x="start">התחל טיפול</button><button class="btn ok" data-x="close">סגור</button>`;
+  if (t.status === 'open') actions = `<button class="btn primary" data-x="start">התחל טיפול</button>`;
   else if (t.status === 'progress') actions = `<button class="btn" data-x="reopen">החזר לפתוחות</button><button class="btn ok" data-x="close">סגור משימה</button>`;
   else actions = `<button class="btn" data-x="reopen">פתח מחדש</button>`;
 
