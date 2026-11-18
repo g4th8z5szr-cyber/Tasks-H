@@ -527,13 +527,14 @@ function taskDetail(id) {
   sheetState = { kind: 'detail', id, dept: t.dept, type: t.type, prio: t.prio };
   const rel = findSimilar(t.title, t.dept, t.id);
   let actions = '';
-  if (t.status === 'open') actions = `<button class="btn primary" data-x="start">התחל טיפול</button>`;
-  else if (t.status === 'progress') actions = `<button class="btn" data-x="reopen">החזר לפתוחות</button><button class="btn ok" data-x="close">סגור משימה</button>`;
+  if (t.status === 'open') actions = `<button class="btn primary" data-x="start">בטיפול</button><button class="btn ok" data-x="close">סגור</button>`;
+  else if (t.status === 'progress') actions = `<button class="btn ok" data-x="close">סגור</button>`;
   else actions = `<button class="btn" data-x="reopen">פתח מחדש</button>`;
 
   openSheet(`<h2>פרטי ${t.type === 'task' ? 'משימה' : 'תקלה'}</h2>
     <input id="d-title" class="field" value="${esc(t.title)}">
     ${t.status !== 'closed' ? repeatBox(rel) : ''}
+    <div class="row">${actions}</div>
     <label>מחלקה</label>${pickChips('dept', DEPTS, t.dept)}
     <label>סוג</label>${pickChips('type', TYPES, t.type)}
     <label>עדיפות</label>${pickChips('prio', PRIOS, t.prio)}
@@ -544,7 +545,6 @@ function taskDetail(id) {
     <label>📷 תמונות</label>${photoStrip(t.photos)}
     <label>הערות</label><textarea id="d-notes" placeholder="מספר דגם, מספר קריאה, פרטים נוספים...">${esc(t.notes || '')}</textarea>
     ${t.status === 'closed' ? `<label>איך טופל</label><textarea id="d-treat">${esc(t.treatment || '')}</textarea>` : ''}
-    <div class="row">${actions}</div>
     <label>עדכון מהלך הטיפול</label>
     <div class="row mt0"><input id="d-log" class="field" placeholder="למשל: הוזמן טכנאי לשעה 10"><button class="btn small primary" data-x="log">הוסף</button></div>
     <div class="hist">${(t.log || []).slice().reverse().map(l => `<div class="h"><small>${fmtDT.format(l.t)}</small>${esc(l.text)}</div>`).join('')}
@@ -566,7 +566,8 @@ function detailCollect(t) {
 function setStatus(t, st) {
   t.status = st;
   if (st === 'progress') { t.startedAt = Date.now(); addLog(t, 'הועבר לטיפול'); }
-  if (st === 'open') { addLog(t, 'הוחזר לפתוחות'); t.closedAt = null; }
+  if (st === 'open') addLog(t, 'הוחזר לפתוחות');
+  if (st !== 'closed') t.closedAt = null;
 }
 function addLog(t, text) { (t.log = t.log || []).push({ t: Date.now(), text }); }
 
@@ -1074,6 +1075,17 @@ document.addEventListener('click', e => {
   if (el.dataset.start) { e.stopPropagation(); const t = db.tasks.find(x => x.id === el.dataset.start); setStatus(t, 'progress'); save(); render(); return toast('הועבר לטיפול'); }
   if (el.dataset.close) { e.stopPropagation(); return closeFlow(el.dataset.close); }
   if (el.dataset.doneR) { e.stopPropagation(); return routineDone(el.dataset.doneR); }
+  if (el.dataset.st && sheetState && sheetState.kind === 'detail') {
+    const t = db.tasks.find(x => x.id === sheetState.id); const st = el.dataset.st;
+    if (!t || t.status === st) return;
+    detailCollect(t);
+    if (st === 'closed') { save(); return closeFlow(t.id); }
+    const wasClosed = t.status === 'closed';
+    setStatus(t, st);
+    if (wasClosed && st === 'progress') addLog(t, 'נפתח מחדש – בטיפול');
+    save(); render(); taskDetail(t.id);
+    return toast(st === 'progress' ? 'עבר לטיפול' : 'הוחזר לפתוחות');
+  }
   if (el.dataset.open) return taskDetail(el.dataset.open);
   if (el.dataset.openR) return routineEdit(el.dataset.openR);
 
