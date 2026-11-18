@@ -248,6 +248,7 @@ function dueState(t) {
 }
 function startOfDay(ts) { const d = new Date(ts); d.setHours(0, 0, 0, 0); return d.getTime(); }
 function typeName(id) { const t = TYPES.find(x => x.id === id); return t ? t.name : ''; }
+function prioTag(t) { return t.status !== 'closed' && t.prio <= 2 ? `<span class="tag ptag p${t.prio}">${t.prio === 1 ? '🔥 דחוף' : 'גבוה'}</span>` : ''; }
 function prioName(v) { const p = PRIOS.find(x => x.v === v); return p ? p.name : ''; }
 let toastT;
 function toast(msg) {
@@ -386,7 +387,7 @@ function cardHtml(it) {
     <div class="bar pr${t.prio}"></div>
     <div class="body"><div class="t">${esc(t.title)}</div>
       <div class="meta">${ui.dept === 'all' && ui.tab === 'closed' && t.dept ? `<span class="tag">${esc(t.dept)}</span>` : ''}
-        <span class="tag">${esc(typeName(t.type))}</span>
+        ${prioTag(t)}<span class="tag">${esc(typeName(t.type))}</span>
         ${t.repeats ? `<span class="tag rep">↻ חוזרת ×${t.repeats + 1}</span>` : ''}
         ${t.photos && t.photos.length ? `<span class="tag">📷 ${t.photos.length}</span>` : ''}
         ${t.contactId && contactName(t.contactId) ? `<span class="tag">👷 ${esc(contactName(t.contactId))}</span>` : ''}
@@ -882,7 +883,7 @@ function overviewSheet() {
     return `<div class="group-h ov-h"><span>${esc(r.name)}</span><span>${mine.length}</span></div>` + mine.map(t => {
       const ds = dueState(t);
       return `<div class="card" data-ovopen="${t.id}"><div class="bar pr${t.prio}"></div><div class="body"><div class="t">${esc(t.title)}</div>
-        <div class="meta"><span class="tag">${esc(t.dept || '')}</span>${t.status === 'progress' ? '<span class="tag st-prog">בטיפול</span>' : '<span class="tag st-open">פתוחה</span>'}
+        <div class="meta">${prioTag(t)}<span class="tag">${esc(t.dept || '')}</span>${t.status === 'progress' ? '<span class="tag st-prog">בטיפול</span>' : '<span class="tag st-open">פתוחה</span>'}
         ${t.repeats ? `<span class="tag rep">↻ ×${t.repeats + 1}</span>` : ''}${ds ? `<span class="tag ${ds.cls}">${ds.txt}</span>` : ''}<span>${ago(t.createdAt)}</span></div></div></div>`;
     }).join('');
   }).join('');

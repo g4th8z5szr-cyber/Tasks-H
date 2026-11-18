@@ -254,3 +254,7 @@ select.field { -webkit-appearance: none; appearance: none; flex: 1; min-width: 0
 .tag.st-open { background: #fff1d6; color: #9a5b00; font-weight: 700; }
 @media (prefers-color-scheme: dark) { .tag.st-open { background: #33270f; color: #ffcf7a; } }
 .ov-h { font-size: 15px; color: var(--text); }
+
+.tag.ptag { font-weight: 800; color: #fff; }
+.tag.ptag.p1 { background: var(--p1); }
+.tag.ptag.p2 { background: var(--p2); }
