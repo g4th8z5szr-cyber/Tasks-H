@@ -258,3 +258,11 @@ select.field { -webkit-appearance: none; appearance: none; flex: 1; min-width: 0
 .tag.ptag { font-weight: 800; color: #fff; }
 .tag.ptag.p1 { background: var(--p1); }
 .tag.ptag.p2 { background: var(--p2); }
+
+/* צבע כמות משימות במחלקה */
+.ld { display: inline-block; min-width: 20px; height: 20px; line-height: 20px; padding: 0 6px; border-radius: 10px; color: #fff !important; font-size: 12px !important; font-weight: 800; text-align: center; opacity: 1 !important; }
+.ld-low { background: var(--ok); }
+.ld-mid { background: var(--p2); }
+.ld-high { background: var(--p1); }
+.chip.on .ld { box-shadow: 0 0 0 1.5px #fff; }
+.fire { font-size: 13px; margin-inline-start: -2px; }

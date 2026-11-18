@@ -248,6 +248,9 @@ function dueState(t) {
 }
 function startOfDay(ts) { const d = new Date(ts); d.setHours(0, 0, 0, 0); return d.getTime(); }
 function typeName(id) { const t = TYPES.find(x => x.id === id); return t ? t.name : ''; }
+// צבע לפי כמות: ירוק 1–2, כתום 3–5, אדום 6+
+const LOAD_MID = 3, LOAD_HIGH = 6;
+function loadCls(n) { return n >= LOAD_HIGH ? 'ld-high' : n >= LOAD_MID ? 'ld-mid' : 'ld-low'; }
 function prioTag(t) { return t.status !== 'closed' && t.prio <= 2 ? `<span class="tag ptag p${t.prio}">${t.prio === 1 ? '🔥 דחופה' : 'גבוהה'}</span>` : ''; }
 function prioName(v) { const p = PRIOS.find(x => x.v === v); return p ? p.name : ''; }
 let toastT;
@@ -306,9 +309,12 @@ function render() {
   const items = currentItems(false);
   const deptList = ui.tab === 'contacts' ? DEPTS : deptsOf(ui.rest);
   // מחלקות
-  const counts = {}; for (const it of items) counts[it.dept || '—'] = (counts[it.dept || '—'] || 0) + 1;
+  const counts = {}, hot = {};
+  for (const it of items) { const k = it.dept || '—'; counts[k] = (counts[k] || 0) + 1; if (it.prio === 1 && it.status && it.status !== 'closed') hot[k] = true; }
+  const colored = ui.tab === 'open' || ui.tab === 'progress';
+  const num = (n, k) => colored ? `<span class="n ld ${loadCls(n)}">${n}</span>${hot[k] ? '<span class="fire">🔥</span>' : ''}` : `<span class="n">${n}</span>`;
   let chips = `<button class="chip ${ui.dept === 'all' ? 'on' : ''}" data-dept="all">הכול <span class="n">${items.length}</span></button>`;
-  for (const d of deptList) chips += `<button class="chip ${ui.dept === d ? 'on' : ''}" data-dept="${esc(d)}">${esc(d)}${counts[d] ? ` <span class="n">${counts[d]}</span>` : ''}</button>`;
+  for (const d of deptList) chips += `<button class="chip ${ui.dept === d ? 'on' : ''}" data-dept="${esc(d)}">${esc(d)}${counts[d] ? ` ${num(counts[d], d)}` : ''}</button>`;
   $('#depts').innerHTML = chips;
 
   // תגים בלשוניות
@@ -327,7 +333,8 @@ function render() {
     for (const it of list) (groups[it.dept || '—'] = groups[it.dept || '—'] || []).push(it);
     for (const d of [...deptList, '—']) {
       if (!groups[d]) continue;
-      html += `<div class="group-h"><span>${d === '—' ? 'ללא מחלקה' : esc(d)}</span><span>${groups[d].length}</span></div>`;
+      const gHot = colored && groups[d].some(t => t.prio === 1);
+      html += `<div class="group-h"><span>${d === '—' ? 'ללא מחלקה' : esc(d)}${gHot ? ' 🔥' : ''}</span>${colored ? `<span class="ld ${loadCls(groups[d].length)}">${groups[d].length}</span>` : `<span>${groups[d].length}</span>`}</div>`;
       html += groups[d].map(cardHtml).join('');
     }
   } else html += list.map(cardHtml).join('');
