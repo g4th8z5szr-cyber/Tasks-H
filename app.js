@@ -7,8 +7,8 @@
 /* ---------- הגדרות שקל לשנות ---------- */
 // שתי המסעדות והמחלקות של כל אחת
 const RESTS = [
-  { id: 'ramah', name: 'רמה״ח', depts: ['פלור', 'מטבח', 'בר', 'הכנות', 'קצביה', 'משרד', 'כללי'] },
-  { id: 'lili', name: 'לילי', depts: ['פלור', 'מטבח', 'משרד', 'כללי'] },
+  { id: 'ramah', name: 'רמה״ח', bg: 'bg-ramah.png', depts: ['פלור', 'מטבח', 'בר', 'הכנות', 'קצביה', 'משרד', 'כללי'] },
+  { id: 'lili', name: 'לילי', bg: 'bg-lili.png', depts: ['פלור', 'מטבח', 'משרד', 'כללי'] },
 ];
 const DEPTS = RESTS[0].depts.slice(); // כל המחלקות (לאנשי קשר)
 const REST_KW = { lili: ['לילי', 'לילינבלום'], ramah: ['רמהח', 'רמה״ח', 'רמה"ח'] };
@@ -295,7 +295,15 @@ function urgencyScore(t) {
 }
 
 /* ---------- רינדור ---------- */
+function applyBg() {
+  const el = $('#bgimg'); if (!el) return;
+  const r = RESTS.find(x => x.id === ui.rest) || RESTS[0];
+  if (el.dataset.rest === r.id) return;
+  el.dataset.rest = r.id;
+  el.style.backgroundImage = r.bg ? `url("${r.bg}")` : 'none';
+}
 function render() {
+  applyBg();
   $('#title').textContent = TITLES[ui.tab];
   document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === ui.tab));
   $('#search-wrap').classList.toggle('hidden', ui.tab !== 'closed' && ui.tab !== 'contacts');
