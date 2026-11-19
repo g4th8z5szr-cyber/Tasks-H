@@ -401,7 +401,7 @@ function cardHtml(it) {
         ${(t.photos || []).length + (t.closePhotos || []).length ? `<span class="tag">📷 ${(t.photos || []).length + (t.closePhotos || []).length}</span>` : ''}
         ${t.contactId && contactName(t.contactId) ? `<span class="tag">👷 ${esc(contactName(t.contactId))}</span>` : ''}
         ${(() => { const ds = dueState(t); return ds ? `<span class="tag ${ds.cls}">${ds.txt}</span>` : ''; })()}
-        ${t.inv && t.inv.st !== 'sent' ? invTag(t) : ''}
+        ${t.inv && t.inv.st !== 'paid' ? invTag(t) : ''}
         <span>${when}</span></div>
       ${t.notes ? `<div class="desc">${esc(t.notes)}</div>` : ''}
       ${t.status === 'closed' && t.treatment ? `<div class="meta">טיפול: ${esc(t.treatment)}</div>` : ''}
@@ -691,13 +691,11 @@ function closeFlow(id) {
     <label>מה עשית / איך טופל? (יוצג בפעם הבאה שהתקלה תחזור)</label>
     <textarea id="c-treat" placeholder="למשל: הוחלף מאוורר במדחס, טכנאי משה 050-...">${esc(t.treatment || '')}</textarea>
     <label>👷 מי טיפל? (לא חובה)</label>${contactSelect('c-contact', t.contactId || (prev && prev.contactId) || null)}
-    ${t.inv ? '' : `<label>🧾 הגיע נותן שירות שצריך ממנו חשבונית?</label>
-    <div class="chips" id="c-inv"><button class="chip" data-invneed="no">לא צריך</button><button class="chip" data-invneed="yes">צריך חשבונית</button></div>`}
+    ${t.inv ? '' : '<div class="note mt8">🧾 אם נבחר איש מקצוע, החשבונית תיכנס לבד למעקב החשבוניות.</div>'}
     ${prev ? `<button class="btn small mt8" data-x="c-prev">כמו בפעם הקודמת: ${esc(prev.treatment.slice(0, 40))}${prev.treatment.length > 40 ? '…' : ''}</button>` : ''}
     <label>📷 תמונה של הטיפול (לא חובה)</label>${photoStrip([])}
     <div class="row"><button class="btn" data-x="cancel">ביטול</button><button class="btn ok" data-x="c-save">סגור משימה</button></div>`);
   sheetState.prev = prev ? prev.treatment : '';
-  setInvNeed($('#c-contact') && $('#c-contact').value ? 'yes' : 'no', false);
   $('#c-treat').focus();
 }
 
@@ -895,43 +893,48 @@ function contactSelect(id, selected) {
 }
 /* ---------- חשבוניות ---------- */
 const INV_ST = [
-  { v: 'wait', n: 'ממתינה', long: 'ממתינה לחשבונית', icon: '⏳' },
-  { v: 'got', n: 'התקבלה', long: 'התקבלה – להעביר להנה״ח', icon: '📥' },
-  { v: 'sent', n: 'הועברה', long: 'הועברה להנהלת חשבונות', icon: '✓' },
+  { v: 'wait', n: 'ממתינה', long: 'ממתינה לחשבונית', tag: 'ממתינה לחשבונית', icon: '⏳' },
+  { v: 'got', n: 'התקבלה', long: 'התקבלה – להעביר להנה״ח', tag: 'להעביר להנה״ח', icon: '📥' },
+  { v: 'sent', n: 'הועברה', long: 'הועברה להנהלת חשבונות', tag: 'הועברה – ממתינה לתשלום', icon: '📤' },
+  { v: 'paid', n: 'שולמה', long: 'שולמה – סגורה', tag: 'שולמה', icon: '✓' },
 ];
+const INV_NEXT = { wait: 'got', got: 'sent', sent: 'paid' };
 function invTag(t) {
   if (!t.inv) return '';
   const st = INV_ST.find(x => x.v === t.inv.st) || INV_ST[0];
-  return `<span class="tag inv-${st.v}">🧾 ${st.v === 'got' ? 'להעביר להנה״ח' : st.long}</span>`;
+  return `<span class="tag inv-${st.v}">🧾 ${st.tag}</span>`;
 }
 function fmtMoney(n) { return n || n === 0 ? '₪' + Number(n).toLocaleString('he-IL', { maximumFractionDigits: 2 }) : ''; }
 function invAdvance(t, st) {
-  const now = Date.now();
-  t.inv.st = st;
-  if (st === 'got' && !t.inv.gotAt) t.inv.gotAt = now;
-  if (st === 'sent') { if (!t.inv.gotAt) t.inv.gotAt = now; t.inv.sentAt = t.inv.sentAt || now; }
-  if (st === 'wait') { t.inv.gotAt = null; t.inv.sentAt = null; }
-  if (st !== 'sent') t.inv.sentAt = null;
-  addLog(t, '🧾 ' + INV_ST.find(x => x.v === st).long);
+  const now = Date.now(), order = INV_ST.map(x => x.v), lvl = order.indexOf(st), i = t.inv;
+  i.st = st;
+  // חותמות זמן לכל שלב שהושלם; שלבים שאחרי הסטטוס החדש מתאפסים
+  if (lvl >= 1) i.gotAt = i.gotAt || now; else i.gotAt = null;
+  if (lvl >= 2) i.sentAt = i.sentAt || now; else i.sentAt = null;
+  if (lvl >= 3) i.paidAt = i.paidAt || now; else i.paidAt = null;
+  addLog(t, '🧾 ' + INV_ST[lvl].long);
 }
 function invoicesSheet() {
   sheetState = { kind: 'invoices' };
   const all = db.tasks.filter(t => t.inv);
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
-  const wait = all.filter(t => t.inv.st === 'wait').sort((a, b) => (a.inv.since || 0) - (b.inv.since || 0));
-  const got = all.filter(t => t.inv.st === 'got').sort((a, b) => (a.inv.gotAt || 0) - (b.inv.gotAt || 0));
-  const sent = all.filter(t => t.inv.st === 'sent' && t.inv.sentAt > Date.now() - 45 * DAY).sort((a, b) => b.inv.sentAt - a.inv.sentAt);
-  const sentMonth = all.filter(t => t.inv.st === 'sent' && t.inv.sentAt >= monthStart);
-  const sum = sentMonth.reduce((a, t) => a + (Number(t.inv.amount) || 0), 0);
+  const by = st => all.filter(t => t.inv.st === st);
+  const wait = by('wait').sort((a, b) => (a.inv.since || 0) - (b.inv.since || 0));
+  const got = by('got').sort((a, b) => (a.inv.gotAt || 0) - (b.inv.gotAt || 0));
+  const sent = by('sent').sort((a, b) => (a.inv.sentAt || 0) - (b.inv.sentAt || 0));
+  const paid = by('paid').filter(t => t.inv.paidAt > Date.now() - 45 * DAY).sort((a, b) => b.inv.paidAt - a.inv.paidAt);
+  const paidMonth = by('paid').filter(t => t.inv.paidAt >= monthStart);
+  const sum = paidMonth.reduce((a, t) => a + (Number(t.inv.amount) || 0), 0);
+  const NEXT_LBL = { wait: 'התקבלה ✓', got: 'הועברה ✓', sent: 'שולמה ✓' };
   const row = t => {
     const c = db.contacts.find(x => x.id === t.contactId);
-    const days = Math.floor((Date.now() - (t.inv.st === 'wait' ? t.inv.since : t.inv.gotAt || t.inv.since || Date.now())) / DAY);
-    const next = t.inv.st === 'wait' ? `<button class="act" data-invnext="${t.id}">התקבלה ✓</button>`
-      : t.inv.st === 'got' ? `<button class="act ok" data-invnext="${t.id}">הועברה ✓</button>` : '';
+    const since = { wait: t.inv.since, got: t.inv.gotAt, sent: t.inv.sentAt }[t.inv.st] || t.inv.since || Date.now();
+    const days = Math.floor((Date.now() - since) / DAY);
+    const next = INV_NEXT[t.inv.st] ? `<button class="act ${t.inv.st === 'sent' ? 'ok' : ''}" data-invnext="${t.id}">${NEXT_LBL[t.inv.st]}</button>` : '';
     return `<div class="card" data-invopen="${t.id}"><div class="body"><div class="t">${esc(t.title)}</div>
       <div class="meta"><span class="tag rest-tag">${esc(restName(t.rest))}</span>${c ? `<span class="tag">👷 ${esc(c.name)}</span>` : ''}
       ${t.inv.amount ? `<span class="tag">${fmtMoney(t.inv.amount)}</span>` : ''}${t.inv.num ? `<span class="tag">#${esc(t.inv.num)}</span>` : ''}
-      ${t.inv.st === 'sent' ? `<span>הועברה ${ago(t.inv.sentAt)}</span>` : `<span class="${days >= 7 ? 'r-over' : ''}">${days <= 0 ? 'מהיום' : `מחכה ${days} ימים`}</span>`}</div>
+      ${t.inv.st === 'paid' ? `<span>שולמה ${ago(t.inv.paidAt)}</span>` : `<span class="${days >= 7 ? 'r-over' : ''}">${days <= 0 ? 'מהיום' : `${days} ימים בשלב הזה`}</span>`}</div>
       ${t.inv.st === 'wait' && c && c.phone ? `<div class="c-line">${callBtn(c, true)} <span class="note">לבקש חשבונית</span></div>` : ''}</div>${next}</div>`;
   };
   const sec = (title, list, empty) => `<div class="group-h ov-h"><span>${title}</span><span>${list.length}</span></div>${list.map(row).join('') || `<div class="note">${empty}</div>`}`;
@@ -939,12 +942,14 @@ function invoicesSheet() {
     <div class="tiles">
       <div class="tile"><b class="${wait.length ? 'r-over' : ''}">${wait.length}</b><span>ממתינות לחשבונית</span></div>
       <div class="tile"><b>${got.length}</b><span>להעביר להנה״ח</span></div>
-      <div class="tile"><b>${sentMonth.length}</b><span>הועברו החודש</span>${sum ? `<small>${fmtMoney(sum)}</small>` : ''}</div>
+      <div class="tile"><b>${sent.length}</b><span>ממתינות לתשלום</span></div>
+      <div class="tile"><b>${paidMonth.length}</b><span>שולמו החודש</span>${sum ? `<small>${fmtMoney(sum)}</small>` : ''}</div>
     </div>
     ${sec('⏳ ממתינות לחשבונית', wait, 'אין חשבוניות שמחכים להן 👍')}
     ${sec('📥 התקבלו – להעביר להנהלת חשבונות', got, 'אין מה להעביר')}
-    ${sent.length ? sec('✓ הועברו לאחרונה', sent, '') : ''}
-    <p class="note">חשבונית נכנסת למעקב כשסוגרים תקלה ובוחרים "צריך חשבונית", או מתוך כל תקלה דרך "🧾 מעקב חשבונית".</p>
+    ${sec('📤 הועברו – ממתינות לתשלום', sent, 'אין חשבוניות שממתינות לתשלום')}
+    ${paid.length ? sec('✓ שולמו לאחרונה', paid, '') : ''}
+    <p class="note">חשבונית נכנסת למעקב לבד כשסוגרים תקלה שהגיע אליה איש מקצוע ("👷 מי טיפל"). אפשר גם להוסיף ידנית מתוך כל תקלה.</p>
     <div class="row"><button class="btn" data-x="cancel">סגור</button></div>`, true);
 }
 function invEdit(id) {
@@ -960,7 +965,7 @@ function invEdit(id) {
     <label>מספר חשבונית (לא חובה)</label><input id="iv-num" class="field" value="${esc(t.inv.num || '')}" autocomplete="off">
     <label>📷 צילום החשבונית</label>${photoStrip(t.inv.photos)}
     <label>הערה</label><input id="iv-note" class="field" value="${esc(t.inv.note || '')}" placeholder="למשל: נשלחה במייל לרואה החשבון" autocomplete="off">
-    <div class="hist">${t.inv.sentAt ? `<div class="h"><small>${fmtDT.format(t.inv.sentAt)}</small>הועברה להנה״ח</div>` : ''}${t.inv.gotAt ? `<div class="h"><small>${fmtDT.format(t.inv.gotAt)}</small>התקבלה</div>` : ''}<div class="h"><small>${fmtDT.format(t.inv.since || t.createdAt)}</small>נפתח מעקב</div></div>
+    <div class="hist">${t.inv.paidAt ? `<div class="h"><small>${fmtDT.format(t.inv.paidAt)}</small>שולמה</div>` : ''}${t.inv.sentAt ? `<div class="h"><small>${fmtDT.format(t.inv.sentAt)}</small>הועברה להנה״ח</div>` : ''}${t.inv.gotAt ? `<div class="h"><small>${fmtDT.format(t.inv.gotAt)}</small>התקבלה</div>` : ''}<div class="h"><small>${fmtDT.format(t.inv.since || t.createdAt)}</small>נפתח מעקב</div></div>
     <div class="row"><button class="btn danger" data-x="iv-del">הסר מעקב</button><button class="btn primary" data-x="iv-save">שמור</button></div>`);
   fillPhotos($('#sheet'));
 }
@@ -1257,8 +1262,9 @@ document.addEventListener('click', e => {
   if (d.invnext) {
     e.stopPropagation();
     const t = db.tasks.find(x => x.id === d.invnext); if (!t || !t.inv) return;
-    invAdvance(t, t.inv.st === 'wait' ? 'got' : 'sent'); save(); render(); invoicesSheet();
-    return toast(t.inv.st === 'got' ? 'סומנה: התקבלה' : 'סומנה: הועברה להנה״ח ✓');
+    if (!INV_NEXT[t.inv.st]) return;
+    invAdvance(t, INV_NEXT[t.inv.st]); save(); render(); invoicesSheet();
+    return toast('🧾 ' + INV_ST.find(x => x.v === t.inv.st).long);
   }
   if (d.invopen) { invEdit(d.invopen); returnTo = invoicesSheet; return; }
   if (d.invadd || d.invedit) {
@@ -1371,7 +1377,6 @@ document.addEventListener('click', e => {
   }
 });
 document.addEventListener('change', e => {
-  if (e.target.id === 'c-contact' && sheetState && sheetState.kind === 'close' && !sheetState.invManual) setInvNeed(e.target.value ? 'yes' : 'no', false);
   if (e.target.id === 'q-contact' && sheetState) {
     sheetState.manual.contact = true; sheetState.contactId = e.target.value || null;
     $('#q-csug').textContent = '';
@@ -1474,9 +1479,10 @@ document.addEventListener('click', e => {
       const tr = $('#c-treat').value.trim();
       if ($('#c-contact')) t.contactId = $('#c-contact').value || null;
       if (s.photos && s.photos.length) { t.closePhotos = (t.closePhotos || []).concat(s.photos); s.saved = true; }
-      if (!t.inv && s.invneed === 'yes') { t.inv = { st: 'wait', since: Date.now(), photos: [] }; addLog(t, '🧾 ממתינה לחשבונית'); }
+      const newInv = !t.inv && !!t.contactId;
+      if (newInv) { t.inv = { st: 'wait', since: Date.now(), photos: [] }; addLog(t, '🧾 ממתינה לחשבונית'); }
       t.treatment = tr; t.status = 'closed'; t.closedAt = Date.now(); addLog(t, 'נסגר' + (tr ? ': ' + tr : ''));
-      save(); closeSheet(); render(); return toast('נסגר ✓');
+      save(); closeSheet(); render(); return toast(newInv ? 'נסגר ✓ · החשבונית נכנסה למעקב 🧾' : 'נסגר ✓');
     }
     case 'r-save': {
       const title = $('#r-title').value.trim(); if (!title) return $('#r-title').focus();

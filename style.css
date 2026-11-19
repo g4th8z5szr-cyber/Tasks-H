@@ -282,9 +282,12 @@ select.field { -webkit-appearance: none; appearance: none; flex: 1; min-width: 0
 .inv-box { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; cursor: pointer; }
 .inv-box .note { margin-inline-start: auto; }
 .act.ok { background: var(--ok); color: #fff; }
-.tiles:has(.tile:nth-child(3):last-child) { grid-template-columns: 1fr 1fr 1fr; }
 .tiles .tile b.r-over { color: var(--p1); }
-.seg-b.inv-seg-wait.on { background: var(--p2); } .seg-b.inv-seg-got.on { background: var(--accent); } .seg-b.inv-seg-sent.on { background: var(--ok); }
+.seg-b.inv-seg-wait.on { background: var(--p2); } .seg-b.inv-seg-got.on { background: var(--accent); } .seg-b.inv-seg-sent.on { background: #7c3aed; } .seg-b.inv-seg-paid.on { background: var(--ok); }
+[class*=inv-seg-] { font-size: 13px !important; padding: 9px 2px !important; }
+.tag.inv-paid { background: #e3f6e9; color: #15803d; font-weight: 700; }
+.tag.inv-sent { background: #efe7ff; color: #6d28d9; }
+@media (prefers-color-scheme: dark) { .tag.inv-paid { background: #12301d; color: #6ee79b; } .tag.inv-sent { background: #2a1f45; color: #c4a8ff; } }
 .top-actions .icon-btn { width: 36px; }
 h1 { font-size: 24px; }
 .mt0 { margin-top: 0; }
