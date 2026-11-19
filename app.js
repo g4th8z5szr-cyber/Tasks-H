@@ -272,6 +272,7 @@ const TITLES = { open: 'משימות פתוחות', progress: 'משימות בט
 
 function taskSort(a, b) {
   if (a.prio !== b.prio) return a.prio - b.prio;
+  if (a.status !== b.status) return a.status === 'open' ? -1 : 1; // באותה עדיפות: פתוחות לפני בטיפול
   const ad = a.due || Infinity, bd = b.due || Infinity;
   if (ad !== bd) return ad - bd;
   return a.createdAt - b.createdAt;
@@ -318,9 +319,9 @@ function render() {
   $('#depts').innerHTML = chips;
 
   // תגים בלשוניות
-  $('#b-open').textContent = db.tasks.filter(t => inRest(t) && t.status === 'open').length || '';
+  $('#b-open').textContent = db.tasks.filter(t => inRest(t) && t.status !== 'closed').length || '';
   $('#b-progress').textContent = db.tasks.filter(t => inRest(t) && t.status === 'progress').length || '';
-  { const tb = $('#btnTemps'); if (tb) tb.classList.toggle('dot-on', db.fridges.length > 0 && fridgesToMeasure().length > 0); }
+  { const ib = $('#btnInv'); if (ib) ib.classList.toggle('dot-on', invoicesPending() > 0); }
   $('#b-routine').textContent = db.routine.filter(r => inRest(r) && routineState(r).days <= 0).length || '';
 
   if (ui.tab === 'cal') { $('#main').innerHTML = calendarHtml(); return; }
@@ -349,7 +350,7 @@ function currentItems(applyFilter) {
   } else if (ui.tab === 'cal') {
     list = db.tasks.filter(t => t.status !== 'closed' && t.due).concat(db.routine);
   } else {
-    list = db.tasks.filter(t => inRest(t) && t.status === ui.tab);
+    list = db.tasks.filter(t => inRest(t) && (t.status === ui.tab || (ui.tab === 'open' && t.status === 'progress')));
     if (ui.tab === 'closed') {
       list.sort((a, b) => (b.closedAt || 0) - (a.closedAt || 0));
       if (ui.q) {
@@ -390,15 +391,17 @@ function cardHtml(it) {
   if (t.status === 'open') act = `<button class="act" data-start="${t.id}">לטיפול</button>`;
   else if (t.status === 'progress') act = `<button class="act" data-close="${t.id}">סגור</button>`;
   const when = t.status === 'closed' ? `נסגר ${ago(t.closedAt)}` : ago(t.createdAt);
-  return `<div class="card" data-open="${t.id}">
+  const progInOpen = ui.tab === 'open' && t.status === 'progress';
+  return `<div class="card ${progInOpen ? 'is-prog' : ''}" data-open="${t.id}">
     <div class="bar pr${t.prio}"></div>
     <div class="body"><div class="t">${esc(t.title)}</div>
       <div class="meta">${ui.dept === 'all' && ui.tab === 'closed' && t.dept ? `<span class="tag">${esc(t.dept)}</span>` : ''}
-        ${prioTag(t)}<span class="tag">${esc(typeName(t.type))}</span>
+        ${progInOpen ? '<span class="tag st-prog">◐ בטיפול</span>' : ''}${prioTag(t)}<span class="tag">${esc(typeName(t.type))}</span>
         ${t.repeats ? `<span class="tag rep">↻ חוזרת ×${t.repeats + 1}</span>` : ''}
         ${(t.photos || []).length + (t.closePhotos || []).length ? `<span class="tag">📷 ${(t.photos || []).length + (t.closePhotos || []).length}</span>` : ''}
         ${t.contactId && contactName(t.contactId) ? `<span class="tag">👷 ${esc(contactName(t.contactId))}</span>` : ''}
         ${(() => { const ds = dueState(t); return ds ? `<span class="tag ${ds.cls}">${ds.txt}</span>` : ''; })()}
+        ${t.inv && t.inv.st !== 'sent' ? invTag(t) : ''}
         <span>${when}</span></div>
       ${t.notes ? `<div class="desc">${esc(t.notes)}</div>` : ''}
       ${t.status === 'closed' && t.treatment ? `<div class="meta">טיפול: ${esc(t.treatment)}</div>` : ''}
@@ -643,6 +646,7 @@ function taskDetail(id) {
     <div class="row mt0"><input id="d-due" type="date" class="field" value="${toInputDate(t.due)}"><button class="btn small" data-x="d-clear-due">ניקוי</button></div>
     <label>👷 טכנאי / ספק</label>
     <div class="row mt0 center">${contactSelect('d-contact', t.contactId)}${(() => { const c = db.contacts.find(x => x.id === t.contactId); return callBtn(c, true); })()}</div>
+    <label>🧾 חשבונית</label>${t.inv ? `<div class="inv-box" data-invedit="${t.id}">${invTag(t)}${t.inv.amount ? ` <b>${fmtMoney(t.inv.amount)}</b>` : ''}<span class="note">עריכה ›</span></div>` : `<button class="link-btn mt0" data-invadd="${t.id}">+ מעקב חשבונית</button>`}
     <label>📷 תמונות</label>${photoStrip(t.photos)}
     ${t.closePhotos && t.closePhotos.length ? `<label>📷 תמונות מהטיפול</label>${thumbs(t.closePhotos)}` : ''}
     <label>📝 תיאור / הערות</label><textarea id="d-notes" placeholder="תיאור התקלה, מספר דגם, מספר קריאה...">${esc(t.notes || '')}</textarea>
@@ -674,6 +678,11 @@ function setStatus(t, st) {
 function addLog(t, text) { (t.log = t.log || []).push({ t: Date.now(), text }); }
 
 /* --- סגירת משימה עם תיעוד הטיפול --- */
+function setInvNeed(v, manual) {
+  if (!sheetState || sheetState.kind !== 'close') return;
+  sheetState.invneed = v; if (manual) sheetState.invManual = true;
+  document.querySelectorAll('#c-inv [data-invneed]').forEach(b => b.classList.toggle('on', b.dataset.invneed === v));
+}
 function closeFlow(id) {
   const t = db.tasks.find(x => x.id === id); if (!t) return;
   const prev = lastTreated(findSimilar(t.title, t.dept, t.id, t.rest));
@@ -682,10 +691,13 @@ function closeFlow(id) {
     <label>מה עשית / איך טופל? (יוצג בפעם הבאה שהתקלה תחזור)</label>
     <textarea id="c-treat" placeholder="למשל: הוחלף מאוורר במדחס, טכנאי משה 050-...">${esc(t.treatment || '')}</textarea>
     <label>👷 מי טיפל? (לא חובה)</label>${contactSelect('c-contact', t.contactId || (prev && prev.contactId) || null)}
+    ${t.inv ? '' : `<label>🧾 הגיע נותן שירות שצריך ממנו חשבונית?</label>
+    <div class="chips" id="c-inv"><button class="chip" data-invneed="no">לא צריך</button><button class="chip" data-invneed="yes">צריך חשבונית</button></div>`}
     ${prev ? `<button class="btn small mt8" data-x="c-prev">כמו בפעם הקודמת: ${esc(prev.treatment.slice(0, 40))}${prev.treatment.length > 40 ? '…' : ''}</button>` : ''}
     <label>📷 תמונה של הטיפול (לא חובה)</label>${photoStrip([])}
     <div class="row"><button class="btn" data-x="cancel">ביטול</button><button class="btn ok" data-x="c-save">סגור משימה</button></div>`);
   sheetState.prev = prev ? prev.treatment : '';
+  setInvNeed($('#c-contact') && $('#c-contact').value ? 'yes' : 'no', false);
   $('#c-treat').focus();
 }
 
@@ -741,7 +753,7 @@ function settings() {
 async function doExport() {
   toast('מכין גיבוי...');
   const photos = {};
-  const ids = new Set(db.tasks.flatMap(t => (t.photos || []).concat(t.closePhotos || [])));
+  const ids = new Set(db.tasks.flatMap(t => (t.photos || []).concat(t.closePhotos || [], (t.inv && t.inv.photos) || [])));
   for (const id of ids) {
     const b = await photoGet(id).catch(() => null); if (!b) continue;
     photos[id] = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(b); });
@@ -837,6 +849,7 @@ function currentPhotoList() {
   if (!sheetState) return null;
   if (sheetState.kind === 'quick' || sheetState.kind === 'close') return sheetState.photos;
   if (sheetState.kind === 'detail') { const t = db.tasks.find(x => x.id === sheetState.id); return t ? (t.photos = t.photos || []) : null; }
+  if (sheetState.kind === 'inv') { const t = db.tasks.find(x => x.id === sheetState.id); return t && t.inv ? (t.inv.photos = t.inv.photos || []) : null; }
   return null;
 }
 function refreshStrip() {
@@ -851,7 +864,7 @@ async function addPhotoFile(file) {
     const blob = await compressImage(file);
     const id = uid(); await photoPut(id, blob);
     list.push(id);
-    if (sheetState.kind === 'detail') save();
+    if (sheetState.kind === 'detail' || sheetState.kind === 'inv') save();
     refreshStrip(); toast('התמונה נוספה');
   } catch (e) { toast('לא הצלחתי לטעון את התמונה'); }
 }
@@ -880,6 +893,79 @@ function contactSelect(id, selected) {
     .map(c => `<option value="${c.id}" ${c.id === selected ? 'selected' : ''}>${esc(c.name)}${c.role ? ' – ' + esc(c.role) : ''}</option>`).join('');
   return `<select id="${id}" class="field"><option value="">— ללא —</option>${opts}</select>`;
 }
+/* ---------- חשבוניות ---------- */
+const INV_ST = [
+  { v: 'wait', n: 'ממתינה', long: 'ממתינה לחשבונית', icon: '⏳' },
+  { v: 'got', n: 'התקבלה', long: 'התקבלה – להעביר להנה״ח', icon: '📥' },
+  { v: 'sent', n: 'הועברה', long: 'הועברה להנהלת חשבונות', icon: '✓' },
+];
+function invTag(t) {
+  if (!t.inv) return '';
+  const st = INV_ST.find(x => x.v === t.inv.st) || INV_ST[0];
+  return `<span class="tag inv-${st.v}">🧾 ${st.v === 'got' ? 'להעביר להנה״ח' : st.long}</span>`;
+}
+function fmtMoney(n) { return n || n === 0 ? '₪' + Number(n).toLocaleString('he-IL', { maximumFractionDigits: 2 }) : ''; }
+function invAdvance(t, st) {
+  const now = Date.now();
+  t.inv.st = st;
+  if (st === 'got' && !t.inv.gotAt) t.inv.gotAt = now;
+  if (st === 'sent') { if (!t.inv.gotAt) t.inv.gotAt = now; t.inv.sentAt = t.inv.sentAt || now; }
+  if (st === 'wait') { t.inv.gotAt = null; t.inv.sentAt = null; }
+  if (st !== 'sent') t.inv.sentAt = null;
+  addLog(t, '🧾 ' + INV_ST.find(x => x.v === st).long);
+}
+function invoicesSheet() {
+  sheetState = { kind: 'invoices' };
+  const all = db.tasks.filter(t => t.inv);
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
+  const wait = all.filter(t => t.inv.st === 'wait').sort((a, b) => (a.inv.since || 0) - (b.inv.since || 0));
+  const got = all.filter(t => t.inv.st === 'got').sort((a, b) => (a.inv.gotAt || 0) - (b.inv.gotAt || 0));
+  const sent = all.filter(t => t.inv.st === 'sent' && t.inv.sentAt > Date.now() - 45 * DAY).sort((a, b) => b.inv.sentAt - a.inv.sentAt);
+  const sentMonth = all.filter(t => t.inv.st === 'sent' && t.inv.sentAt >= monthStart);
+  const sum = sentMonth.reduce((a, t) => a + (Number(t.inv.amount) || 0), 0);
+  const row = t => {
+    const c = db.contacts.find(x => x.id === t.contactId);
+    const days = Math.floor((Date.now() - (t.inv.st === 'wait' ? t.inv.since : t.inv.gotAt || t.inv.since || Date.now())) / DAY);
+    const next = t.inv.st === 'wait' ? `<button class="act" data-invnext="${t.id}">התקבלה ✓</button>`
+      : t.inv.st === 'got' ? `<button class="act ok" data-invnext="${t.id}">הועברה ✓</button>` : '';
+    return `<div class="card" data-invopen="${t.id}"><div class="body"><div class="t">${esc(t.title)}</div>
+      <div class="meta"><span class="tag rest-tag">${esc(restName(t.rest))}</span>${c ? `<span class="tag">👷 ${esc(c.name)}</span>` : ''}
+      ${t.inv.amount ? `<span class="tag">${fmtMoney(t.inv.amount)}</span>` : ''}${t.inv.num ? `<span class="tag">#${esc(t.inv.num)}</span>` : ''}
+      ${t.inv.st === 'sent' ? `<span>הועברה ${ago(t.inv.sentAt)}</span>` : `<span class="${days >= 7 ? 'r-over' : ''}">${days <= 0 ? 'מהיום' : `מחכה ${days} ימים`}</span>`}</div>
+      ${t.inv.st === 'wait' && c && c.phone ? `<div class="c-line">${callBtn(c, true)} <span class="note">לבקש חשבונית</span></div>` : ''}</div>${next}</div>`;
+  };
+  const sec = (title, list, empty) => `<div class="group-h ov-h"><span>${title}</span><span>${list.length}</span></div>${list.map(row).join('') || `<div class="note">${empty}</div>`}`;
+  openSheet(`<h2>🧾 חשבוניות</h2>
+    <div class="tiles">
+      <div class="tile"><b class="${wait.length ? 'r-over' : ''}">${wait.length}</b><span>ממתינות לחשבונית</span></div>
+      <div class="tile"><b>${got.length}</b><span>להעביר להנה״ח</span></div>
+      <div class="tile"><b>${sentMonth.length}</b><span>הועברו החודש</span>${sum ? `<small>${fmtMoney(sum)}</small>` : ''}</div>
+    </div>
+    ${sec('⏳ ממתינות לחשבונית', wait, 'אין חשבוניות שמחכים להן 👍')}
+    ${sec('📥 התקבלו – להעביר להנהלת חשבונות', got, 'אין מה להעביר')}
+    ${sent.length ? sec('✓ הועברו לאחרונה', sent, '') : ''}
+    <p class="note">חשבונית נכנסת למעקב כשסוגרים תקלה ובוחרים "צריך חשבונית", או מתוך כל תקלה דרך "🧾 מעקב חשבונית".</p>
+    <div class="row"><button class="btn" data-x="cancel">סגור</button></div>`, true);
+}
+function invEdit(id) {
+  const t = db.tasks.find(x => x.id === id); if (!t || !t.inv) return;
+  t.inv.photos = t.inv.photos || [];
+  sheetState = { kind: 'inv', id, st: t.inv.st };
+  const c = db.contacts.find(x => x.id === t.contactId);
+  openSheet(`<h2>🧾 חשבונית</h2>
+    <div class="kv"><b>${esc(t.title)}</b><br>${esc(restName(t.rest))} · ${esc(t.dept || '')}${c ? ` · 👷 ${esc(c.name)}` : ''} ${callBtn(c, true)}</div>
+    <label>סטטוס</label>
+    <div class="seg">${INV_ST.map(x => `<button class="seg-b inv-seg-${x.v} ${x.v === t.inv.st ? 'on' : ''}" data-invst="${x.v}">${x.icon} ${x.n}</button>`).join('')}</div>
+    <label>סכום (לא חובה)</label><input id="iv-amount" class="field" type="number" inputmode="decimal" step="0.01" placeholder="₪" value="${t.inv.amount ?? ''}">
+    <label>מספר חשבונית (לא חובה)</label><input id="iv-num" class="field" value="${esc(t.inv.num || '')}" autocomplete="off">
+    <label>📷 צילום החשבונית</label>${photoStrip(t.inv.photos)}
+    <label>הערה</label><input id="iv-note" class="field" value="${esc(t.inv.note || '')}" placeholder="למשל: נשלחה במייל לרואה החשבון" autocomplete="off">
+    <div class="hist">${t.inv.sentAt ? `<div class="h"><small>${fmtDT.format(t.inv.sentAt)}</small>הועברה להנה״ח</div>` : ''}${t.inv.gotAt ? `<div class="h"><small>${fmtDT.format(t.inv.gotAt)}</small>התקבלה</div>` : ''}<div class="h"><small>${fmtDT.format(t.inv.since || t.createdAt)}</small>נפתח מעקב</div></div>
+    <div class="row"><button class="btn danger" data-x="iv-del">הסר מעקב</button><button class="btn primary" data-x="iv-save">שמור</button></div>`);
+  fillPhotos($('#sheet'));
+}
+function invoicesPending() { return db.tasks.filter(t => t.inv && (t.inv.st === 'wait' || t.inv.st === 'got')).length; }
+
 /* ---------- כל המשימות הפתוחות של שתי המסעדות ---------- */
 let returnTo = null; // לאן לחזור אחרי שסוגרים משימה שנפתחה מהסקירה
 function overviewSheet() {
@@ -1162,10 +1248,29 @@ function statsSheet(offset, rest) {
 /* ---------- אירועים של התוספות ---------- */
 document.addEventListener('click', e => {
   if (e.target.closest('a.call')) return; // חיוג – לא לפתוח עריכה
-  const el = e.target.closest('button, [data-ph], [data-cedit], [data-fhist], [data-ovopen]'); if (!el) return;
+  const el = e.target.closest('button, [data-ph], [data-cedit], [data-fhist], [data-ovopen], [data-invopen], [data-invedit]'); if (!el) return;
   const d = el.dataset;
   if (el.id === 'btnContacts') return contactsSheet();
   if (el.id === 'btnAll') return overviewSheet();
+  if (el.id === 'btnInv') return invoicesSheet();
+  if (d.invneed) return setInvNeed(d.invneed, true);
+  if (d.invnext) {
+    e.stopPropagation();
+    const t = db.tasks.find(x => x.id === d.invnext); if (!t || !t.inv) return;
+    invAdvance(t, t.inv.st === 'wait' ? 'got' : 'sent'); save(); render(); invoicesSheet();
+    return toast(t.inv.st === 'got' ? 'סומנה: התקבלה' : 'סומנה: הועברה להנה״ח ✓');
+  }
+  if (d.invopen) { invEdit(d.invopen); returnTo = invoicesSheet; return; }
+  if (d.invadd || d.invedit) {
+    const id = d.invadd || d.invedit; const t = db.tasks.find(x => x.id === id); if (!t) return;
+    detailCollect(t);
+    if (!t.inv) { t.inv = { st: 'wait', since: Date.now(), photos: [] }; addLog(t, '🧾 ממתינה לחשבונית'); }
+    save(); render(); invEdit(id); returnTo = () => taskDetail(id); return;
+  }
+  if (d.invst && sheetState && sheetState.kind === 'inv') {
+    sheetState.st = d.invst;
+    document.querySelectorAll('#sheet [data-invst]').forEach(b => b.classList.toggle('on', b === el)); return;
+  }
   if (d.ovopen) { taskDetail(d.ovopen); returnTo = overviewSheet; return; }
   if (el.id === 'btnTemps') return tempsSheet();
   if (el.id === 'btnStats') return statsSheet(0);
@@ -1174,7 +1279,7 @@ document.addEventListener('click', e => {
     const list = currentPhotoList(); if (!list) return;
     if (!confirm('למחוק את התמונה?')) return;
     const i = list.indexOf(d.phdel); if (i >= 0) list.splice(i, 1);
-    photoDel(d.phdel); if (sheetState.kind === 'detail') save(); refreshStrip(); return;
+    photoDel(d.phdel); if (sheetState.kind === 'detail' || sheetState.kind === 'inv') save(); refreshStrip(); return;
   }
   if (d.cedit) return contactEdit(d.cedit);
   if (d.role) { $('#ce-role').value = d.role; return; }
@@ -1197,6 +1302,18 @@ document.addEventListener('click', e => {
 
   switch (d.x) {
     case 'ph-add': return $('#ph-input').click();
+    case 'iv-save': {
+      const t = db.tasks.find(x => x.id === sheetState.id); if (!t || !t.inv) return;
+      if (sheetState.st !== t.inv.st) invAdvance(t, sheetState.st);
+      const a = $('#iv-amount').value.trim(); t.inv.amount = a === '' ? null : Number(a);
+      t.inv.num = $('#iv-num').value.trim(); t.inv.note = $('#iv-note').value.trim();
+      save(); render(); closeSheet(); return toast('נשמר');
+    }
+    case 'iv-del': {
+      const t = db.tasks.find(x => x.id === sheetState.id); if (!t || !t.inv) return;
+      if (!confirm('להסיר את מעקב החשבונית?')) return;
+      (t.inv.photos || []).forEach(id => photoDel(id)); delete t.inv; save(); render(); closeSheet(); return;
+    }
     case 'c-new': return contactEdit(null);
     case 'c-vcf': return $('#vcf-input').click();
     case 'c-pick':
@@ -1254,6 +1371,7 @@ document.addEventListener('click', e => {
   }
 });
 document.addEventListener('change', e => {
+  if (e.target.id === 'c-contact' && sheetState && sheetState.kind === 'close' && !sheetState.invManual) setInvNeed(e.target.value ? 'yes' : 'no', false);
   if (e.target.id === 'q-contact' && sheetState) {
     sheetState.manual.contact = true; sheetState.contactId = e.target.value || null;
     $('#q-csug').textContent = '';
@@ -1349,13 +1467,14 @@ document.addEventListener('click', e => {
       detailCollect(t); addLog(t, v); save(); taskDetail(t.id); return;
     }
     case 'del':
-      if (confirm('למחוק את המשימה?')) { (t.photos || []).concat(t.closePhotos || []).forEach(id => photoDel(id)); db.tasks = db.tasks.filter(y => y.id !== t.id); save(); closeSheet(); render(); }
+      if (confirm('למחוק את המשימה?')) { (t.photos || []).concat(t.closePhotos || [], (t.inv && t.inv.photos) || []).forEach(id => photoDel(id)); db.tasks = db.tasks.filter(y => y.id !== t.id); save(); closeSheet(); render(); }
       return;
     case 'c-prev': $('#c-treat').value = s.prev; return;
     case 'c-save': {
       const tr = $('#c-treat').value.trim();
       if ($('#c-contact')) t.contactId = $('#c-contact').value || null;
       if (s.photos && s.photos.length) { t.closePhotos = (t.closePhotos || []).concat(s.photos); s.saved = true; }
+      if (!t.inv && s.invneed === 'yes') { t.inv = { st: 'wait', since: Date.now(), photos: [] }; addLog(t, '🧾 ממתינה לחשבונית'); }
       t.treatment = tr; t.status = 'closed'; t.closedAt = Date.now(); addLog(t, 'נסגר' + (tr ? ': ' + tr : ''));
       save(); closeSheet(); render(); return toast('נסגר ✓');
     }

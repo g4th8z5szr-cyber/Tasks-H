@@ -269,3 +269,22 @@ select.field { -webkit-appearance: none; appearance: none; flex: 1; min-width: 0
 
 .photos.small .ph { width: 56px; height: 56px; border-radius: 9px; }
 .photos.small { margin-top: 6px; }
+
+/* משימה בטיפול שמוצגת בלשונית הפתוחות */
+.card.is-prog { background: color-mix(in srgb, var(--accent) 9%, var(--card)); border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+.card.is-prog .t { opacity: .85; }
+
+/* חשבוניות */
+.tag.inv-wait { background: #fff1d6; color: #9a5b00; font-weight: 700; }
+.tag.inv-got { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.tag.inv-sent { background: #e3f6e9; color: #15803d; font-weight: 700; }
+@media (prefers-color-scheme: dark) { .tag.inv-wait { background: #33270f; color: #ffcf7a; } .tag.inv-sent { background: #12301d; color: #6ee79b; } }
+.inv-box { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; cursor: pointer; }
+.inv-box .note { margin-inline-start: auto; }
+.act.ok { background: var(--ok); color: #fff; }
+.tiles:has(.tile:nth-child(3):last-child) { grid-template-columns: 1fr 1fr 1fr; }
+.tiles .tile b.r-over { color: var(--p1); }
+.seg-b.inv-seg-wait.on { background: var(--p2); } .seg-b.inv-seg-got.on { background: var(--accent); } .seg-b.inv-seg-sent.on { background: var(--ok); }
+.top-actions .icon-btn { width: 36px; }
+h1 { font-size: 24px; }
+.mt0 { margin-top: 0; }
