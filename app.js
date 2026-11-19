@@ -295,12 +295,18 @@ function urgencyScore(t) {
 }
 
 /* ---------- רינדור ---------- */
+const bgStatus = {}; // האם קובץ הרקע נטען
 function applyBg() {
-  const el = $('#bgimg'); if (!el) return;
+  let el = $('#bgimg');
+  if (!el) { el = document.createElement('div'); el.id = 'bgimg'; el.setAttribute('aria-hidden', 'true'); document.body.prepend(el); }
   const r = RESTS.find(x => x.id === ui.rest) || RESTS[0];
   if (el.dataset.rest === r.id) return;
   el.dataset.rest = r.id;
-  el.style.backgroundImage = r.bg ? `url("${r.bg}")` : 'none';
+  if (!r.bg) { el.style.backgroundImage = 'none'; return; }
+  const img = new Image();
+  img.onload = () => { bgStatus[r.id] = 'ok'; if (el.dataset.rest === r.id) el.style.backgroundImage = `url("${img.src}")`; };
+  img.onerror = () => { bgStatus[r.id] = 'missing'; };
+  img.src = new URL(r.bg, location.href).href;
 }
 function render() {
   applyBg();
@@ -747,6 +753,9 @@ function settings() {
       <p class="note">הנתונים שמורים רק בטלפון הזה. כדאי לייצא גיבוי פעם בשבוע ולשמור אותו ב"קבצים" (אפשר לבחור "On My iPhone"). הגיבוי כולל גם את התמונות.</p>
       <div class="row"><button class="btn primary" data-x="export">ייצוא גיבוי</button><button class="btn" data-x="import">שחזור מגיבוי</button></div>
       <input id="imp-file" type="file" accept="application/json,.json" class="hidden">
+    </div>
+    <div class="set-sec"><label>🖼️ רקע</label>
+      <p class="note">${RESTS.map(r => `${esc(r.name)}: ${bgStatus[r.id] === 'ok' ? '✓ נטען' : bgStatus[r.id] === 'missing' ? `⚠ הקובץ ${r.bg} לא נמצא ב־GitHub` : 'לא נבדק עדיין (עברו למסעדה הזו)'}`).join('<br>')}</p>
     </div>
     <div class="set-sec"><label>פרטיות ואבטחה</label>
       <p class="note">🔒 האפליקציה חסומה לגישה לאינטרנט (Content-Security-Policy: connect-src 'none'), אין בה התחברות, אין חשבון, ואין שדות לפרטים אישיים או תשלום. שום נתון לא נשלח לשום מקום.</p>
