@@ -321,3 +321,8 @@ main { position: relative; z-index: 1; }
 .ph-add { position: relative; cursor: pointer; overflow: hidden; }
 .ph-input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; font-size: 0; }
 .sheet label.ph-add { display: flex; flex-direction: column; align-items: center; justify-content: center; margin: 0; font-size: 22px; font-weight: 400; color: var(--muted); }
+
+/* מועד הגעה של איש מקצוע */
+.tag.visit { background: #efe7ff; color: #6d28d9; font-weight: 700; }
+@media (prefers-color-scheme: dark) { .tag.visit { background: #2a1f45; color: #c4a8ff; } }
+.d-visit { background: #7c3aed; }

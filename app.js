@@ -411,7 +411,7 @@ function cardHtml(it) {
         ${progInOpen ? '<span class="tag st-prog">◐ בטיפול</span>' : ''}${prioTag(t)}<span class="tag">${esc(typeName(t.type))}</span>
         ${t.repeats ? `<span class="tag rep">↻ חוזרת ×${t.repeats + 1}</span>` : ''}
         ${(t.photos || []).length + (t.closePhotos || []).length ? `<span class="tag">📷 ${(t.photos || []).length + (t.closePhotos || []).length}</span>` : ''}
-        ${t.contactId && contactName(t.contactId) ? `<span class="tag">👷 ${esc(contactName(t.contactId))}</span>` : ''}
+        ${t.contactId && contactName(t.contactId) ? `<span class="tag ${t.visitAt && t.status !== 'closed' ? 'visit' : ''}">👷 ${esc(contactName(t.contactId))}${t.visitAt && t.status !== 'closed' ? ` · ${whenTxt(t.visitAt)}` : ''}</span>` : ''}
         ${(() => { const ds = dueState(t); return ds ? `<span class="tag ${ds.cls}">${ds.txt}</span>` : ''; })()}
         ${t.inv && t.inv.st !== 'paid' ? invTag(t) : ''}
         <span>${when}</span></div>
@@ -461,6 +461,7 @@ function calEvents(from, to) {
   for (const t of db.tasks) {
     if (t.status === 'closed' || !okDept(t)) continue;
     if (t.due) put(t.due, { kind: 'due', item: t, ts: t.due, over: startOfDay(t.due) < today });
+    if (t.visitAt) put(t.visitAt, { kind: 'visit', item: t, ts: t.visitAt });
   }
   for (const r of db.routine) {
     if (!okDept(r)) continue;
@@ -470,7 +471,7 @@ function calEvents(from, to) {
     if (d < from) { const k = Math.ceil((from - d) / (step * DAY)); d = addDays(d, k * step); }
     for (let i = 0; d <= to && i < 400; i++, d = addDays(d, step)) put(d, { kind: 'routine', item: r, ts: d });
   }
-  for (const k in map) map[k].sort((a, b) => ({ due: 0, rem: 1, routine: 2 })[a.kind] - ({ due: 0, rem: 1, routine: 2 })[b.kind] || a.ts - b.ts);
+  for (const k in map) map[k].sort((a, b) => ({ visit: 0, due: 1, rem: 2, routine: 3 })[a.kind] - ({ visit: 0, due: 1, rem: 2, routine: 3 })[b.kind] || a.ts - b.ts);
   return map;
 }
 function calendarHtml() {
@@ -487,7 +488,7 @@ function calendarHtml() {
   for (let d = gridStart; d <= gridEnd; d = addDays(d, 1)) {
     const list = ev[d] || [];
     const kinds = new Set(list.map(e => e.kind === 'due' && e.over ? 'over' : e.kind === 'routine' && e.over ? 'over' : e.kind));
-    const dots = ['over', 'due', 'routine'].filter(k => kinds.has(k)).map(k => `<i class="dot d-${k}"></i>`).join('');
+    const dots = ['over', 'visit', 'due', 'routine'].filter(k => kinds.has(k)).map(k => `<i class="dot d-${k}"></i>`).join('');
     const cls = ['cal-d', new Date(d).getMonth() !== m.getMonth() ? 'out' : '', d === today ? 'today' : '', d === ui.calDay ? 'sel' : ''].join(' ');
     cells += `<button class="${cls}" data-day="${d}"><span>${new Date(d).getDate()}</span><span class="dots">${dots}</span></button>`;
   }
@@ -496,7 +497,8 @@ function calendarHtml() {
   const heb = fmtHebDate ? ' · ' + fmtHebDate.format(ui.calDay) : '';
   const rows = dayList.map(e => {
     const it = e.item;
-    const label = e.kind === 'due' ? (e.over ? '<span class="tag over">⚠ יעד עבר</span>' : '<span class="tag">📅 יעד</span>')
+ const label = e.kind === 'visit' ? `<span class="tag visit">👷 ${esc(contactName(it.contactId) || 'איש מקצוע')} · ${fmtTime.format(e.ts)}</span>`
+      : e.kind === 'due' ? (e.over ? '<span class="tag over">⚠ יעד עבר</span>' : '<span class="tag">📅 יעד</span>')
 
       : `<span class="tag ${e.over ? 'over' : ''}">↻ שוטף${e.over ? ' – לביצוע' : ''}</span>`;
     const open = e.kind === 'routine' ? `data-open-r="${it.id}"` : `data-open="${it.id}"`;
@@ -510,7 +512,7 @@ function calendarHtml() {
       <button class="r-btn" data-cal-nav="1" aria-label="חודש הבא">‹</button></div>
     ${ui.calMonth !== new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime() || ui.calDay !== today ? '<button class="link-btn cal-today" data-cal-nav="0">חזרה להיום</button>' : ''}
     <div class="cal-grid">${HEB_DAYS.map(x => `<div class="cal-h">${x}</div>`).join('')}${cells}</div>
-    <div class="cal-legend"><span><i class="dot d-over"></i>באיחור</span><span><i class="dot d-due"></i>יעד</span><span><i class="dot d-routine"></i>שוטף</span></div>
+    <div class="cal-legend"><span><i class="dot d-over"></i>באיחור</span><span><i class="dot d-visit"></i>איש מקצוע</span><span><i class="dot d-due"></i>יעד</span><span><i class="dot d-routine"></i>שוטף</span></div>
   </div>
   <div class="group-h"><span>${fmtDayLong.format(ui.calDay)}${heb}</span><span>${dayList.length || ''}</span></div>
   ${rows || '<div class="empty small">אין כלום ביום הזה</div>'}
@@ -538,7 +540,8 @@ function quickAdd(prefillDue) {
     </div>
     <button class="link-btn" data-x="q-cshow" id="q-cshow">👷 טכנאי / ספק <span class="note">(לא חובה)</span></button>
     <div id="q-cwrap" class="hidden"><label>👷 טכנאי / ספק <span id="q-csug" class="auto"></span></label>
-      <div class="row mt0 center"><div id="q-csel" class="grow"></div><span id="q-call"></span></div></div>
+      <div class="row mt0 center"><div id="q-csel" class="grow"></div><span id="q-call"></span></div>
+      <label>📅 מתי איש המקצוע מגיע? (לא חובה)</label><input id="q-visit" type="datetime-local" class="field"></div>
     ${photoStrip([])}
     <div class="row"><button class="btn" data-x="cancel">ביטול</button><button class="btn primary" data-x="q-save">שמור</button></div>`);
   quickRefresh();
@@ -622,6 +625,7 @@ function quickSave() {
     status: 'open', createdAt: Date.now(), log: [],
     due: parseDate($('#q-due').value), photos: s.photos.slice(),
     contactId: ($('#q-contact') && $('#q-contact').value) || null,
+    visitAt: ($('#q-contact') && $('#q-contact').value && parseDT($('#q-visit').value)) || null,
   };
   s.saved = true;
 
@@ -658,6 +662,8 @@ function taskDetail(id) {
     <div class="row mt0"><input id="d-due" type="date" class="field" value="${toInputDate(t.due)}"><button class="btn small" data-x="d-clear-due">ניקוי</button></div>
     <label>👷 טכנאי / ספק</label>
     <div class="row mt0 center">${contactSelect('d-contact', t.contactId)}${(() => { const c = db.contacts.find(x => x.id === t.contactId); return callBtn(c, true); })()}</div>
+    <div id="d-visit-wrap" class="${t.contactId ? '' : 'hidden'}"><label>📅 מתי איש המקצוע מגיע? (לא חובה)</label>
+      <div class="row mt0"><input id="d-visit" type="datetime-local" class="field" value="${toInputDT(t.visitAt)}"><button class="btn small" data-x="d-clear-visit">ניקוי</button></div></div>
     <label>🧾 חשבונית</label>${t.inv ? `<div class="inv-box" data-invedit="${t.id}">${invTag(t)}${t.inv.amount ? ` <b>${fmtMoney(t.inv.amount)}</b>` : ''}<span class="note">עריכה ›</span></div>` : `<button class="link-btn mt0" data-invadd="${t.id}">+ מעקב חשבונית</button>`}
     <label>📷 תמונות</label>${photoStrip(t.photos)}
     ${t.closePhotos && t.closePhotos.length ? `<label>📷 תמונות מהטיפול</label>${thumbs(t.closePhotos)}` : ''}
@@ -677,6 +683,10 @@ function detailCollect(t) {
   t.notes = $('#d-notes').value.trim();
   t.due = parseDate($('#d-due').value);
   if ($('#d-contact')) t.contactId = $('#d-contact').value || null;
+  if ($('#d-visit')) {
+    const v = t.contactId ? parseDT($('#d-visit').value) : null;
+    if (!sameMinute(v, t.visitAt)) { t.visitAt = v; if (v) addLog(t, `📅 נקבע: ${contactName(t.contactId)} מגיע ${whenTxt(v)}`); }
+  }
   const changedClass = t.dept !== sheetState.dept || t.type !== sheetState.type;
   t.rest = sheetState.rest; t.dept = sheetState.dept; t.type = sheetState.type; t.prio = sheetState.prio;
   if ($('#d-treat')) t.treatment = $('#d-treat').value.trim();
@@ -1389,6 +1399,7 @@ document.addEventListener('click', e => {
   }
 });
 document.addEventListener('change', e => {
+  if (e.target.id === 'd-contact' && $('#d-visit-wrap')) $('#d-visit-wrap').classList.toggle('hidden', !e.target.value);
   if (e.target.id === 'q-contact' && sheetState) {
     sheetState.manual.contact = true; sheetState.contactId = e.target.value || null;
     $('#q-csug').textContent = '';
@@ -1478,6 +1489,7 @@ document.addEventListener('click', e => {
       return;
     }
     case 'd-clear-due': $('#d-due').value = ''; return;
+    case 'd-clear-visit': $('#d-visit').value = ''; return;
     case 'd-save': detailCollect(t); save(); closeSheet(); render(); return toast('נשמר');
     case 'start': detailCollect(t); setStatus(t, 'progress'); save(); closeSheet(); render(); return toast('הועבר לטיפול');
     case 'reopen': detailCollect(t); setStatus(t, 'open'); save(); closeSheet(); render(); return toast('הוחזר לפתוחות');
