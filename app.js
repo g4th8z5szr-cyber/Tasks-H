@@ -7,8 +7,8 @@
 /* ---------- הגדרות שקל לשנות ---------- */
 // שתי המסעדות והמחלקות של כל אחת
 const RESTS = [
-  { id: 'ramah', name: 'רמה״ח', bg: 'bg-ramah.png', depts: ['פלור', 'מטבח', 'בר', 'הכנות', 'קצביה', 'משרד', 'כללי'] },
-  { id: 'lili', name: 'לילי', bg: 'bg-lili.png', depts: ['פלור', 'מטבח', 'משרד', 'כללי'] },
+  { id: 'ramah', name: 'רמה״ח', depts: ['פלור', 'מטבח', 'בר', 'הכנות', 'קצביה', 'משרד', 'כללי'] },
+  { id: 'lili', name: 'לילי', depts: ['פלור', 'מטבח', 'משרד', 'כללי'] },
 ];
 const DEPTS = RESTS[0].depts.slice(); // כל המחלקות (לאנשי קשר)
 const REST_KW = { lili: ['לילי', 'לילינבלום'], ramah: ['רמהח', 'רמה״ח', 'רמה"ח'] };
@@ -295,21 +295,8 @@ function urgencyScore(t) {
 }
 
 /* ---------- רינדור ---------- */
-const bgStatus = {}; // האם קובץ הרקע נטען
-function applyBg() {
-  let el = $('#bgimg');
-  if (!el) { el = document.createElement('div'); el.id = 'bgimg'; el.setAttribute('aria-hidden', 'true'); document.body.prepend(el); }
-  const r = RESTS.find(x => x.id === ui.rest) || RESTS[0];
-  if (el.dataset.rest === r.id) return;
-  el.dataset.rest = r.id;
-  if (!r.bg) { el.style.backgroundImage = 'none'; return; }
-  const img = new Image();
-  img.onload = () => { bgStatus[r.id] = 'ok'; if (el.dataset.rest === r.id) el.style.backgroundImage = `url("${img.src}")`; };
-  img.onerror = () => { bgStatus[r.id] = 'missing'; };
-  img.src = new URL(r.bg, location.href).href;
-}
 function render() {
-  applyBg();
+  { const old = $('#bgimg'); if (old) old.remove(); } // הרקע הוסר
   $('#title').textContent = TITLES[ui.tab];
   document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === ui.tab));
   $('#search-wrap').classList.toggle('hidden', ui.tab !== 'closed' && ui.tab !== 'contacts');
@@ -753,9 +740,6 @@ function settings() {
       <p class="note">הנתונים שמורים רק בטלפון הזה. כדאי לייצא גיבוי פעם בשבוע ולשמור אותו ב"קבצים" (אפשר לבחור "On My iPhone"). הגיבוי כולל גם את התמונות.</p>
       <div class="row"><button class="btn primary" data-x="export">ייצוא גיבוי</button><button class="btn" data-x="import">שחזור מגיבוי</button></div>
       <input id="imp-file" type="file" accept="application/json,.json" class="hidden">
-    </div>
-    <div class="set-sec"><label>🖼️ רקע</label>
-      <p class="note">${RESTS.map(r => `${esc(r.name)}: ${bgStatus[r.id] === 'ok' ? '✓ נטען' : bgStatus[r.id] === 'missing' ? `⚠ הקובץ ${r.bg} לא נמצא ב־GitHub` : 'לא נבדק עדיין (עברו למסעדה הזו)'}`).join('<br>')}</p>
     </div>
     <div class="set-sec"><label>פרטיות ואבטחה</label>
       <p class="note">🔒 האפליקציה חסומה לגישה לאינטרנט (Content-Security-Policy: connect-src 'none'), אין בה התחברות, אין חשבון, ואין שדות לפרטים אישיים או תשלום. שום נתון לא נשלח לשום מקום.</p>
