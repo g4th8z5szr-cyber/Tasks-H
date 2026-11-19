@@ -847,8 +847,8 @@ function thumbs(ids, small) {
 }
 function photoStrip(ids) {
   return `<div class="photos" id="ph-strip">${(ids || []).map(id => `<div class="ph"><img data-ph="${id}" alt="תמונה"><button class="ph-del" data-phdel="${id}" aria-label="מחיקת תמונה">✕</button></div>`).join('')}
-    <button class="ph-add" data-x="ph-add">📷<span>הוספת תמונה</span></button></div>
-    <input id="ph-input" type="file" accept="image/*" class="hidden">`;
+    <label class="ph-add">🖼️<span>מהגלריה</span><input class="ph-input" type="file" accept="image/*" multiple></label>
+    <label class="ph-add">📷<span>צילום</span><input class="ph-input" type="file" accept="image/*" capture="environment"></label></div>`;
 }
 async function fillPhotos(root) {
   for (const img of (root || document).querySelectorAll('img[data-ph]')) {
@@ -1395,7 +1395,10 @@ document.addEventListener('change', e => {
     $('#q-csug').textContent = '';
     $('#q-call').innerHTML = callBtn(db.contacts.find(c => c.id === sheetState.contactId), true);
   }
-  if (e.target.id === 'ph-input' && e.target.files[0]) { addPhotoFile(e.target.files[0]); e.target.value = ''; }
+  if (e.target.classList && e.target.classList.contains('ph-input') && e.target.files.length) {
+    const files = [...e.target.files]; e.target.value = '';
+    (async () => { for (const f of files) await addPhotoFile(f); })();
+  }
   if (e.target.id === 'vcf-input' && e.target.files.length) {
     Promise.all([...e.target.files].map(f => f.text())).then(texts => {
       const list = texts.flatMap(parseVcf);
