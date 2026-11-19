@@ -323,6 +323,11 @@ function render() {
   $('#b-open').textContent = db.tasks.filter(t => inRest(t) && t.status !== 'closed').length || '';
   $('#b-progress').textContent = db.tasks.filter(t => inRest(t) && t.status === 'progress').length || '';
   { const ib = $('#btnInv'); if (ib) ib.classList.toggle('dot-on', invoicesPending() > 0); }
+  { // אייקון היומן: התאריך של היום + כמה דברים יש היום (בשתי המסעדות)
+    const today = startOfDay(Date.now()), cd = $('#cal-day'), bc = $('#b-cal');
+    if (cd) cd.textContent = new Date().getDate();
+    if (bc) bc.textContent = (calEvents(today, today)[today] || []).length || '';
+  }
   $('#b-routine').textContent = db.routine.filter(r => inRest(r) && routineState(r).days <= 0).length || '';
 
   if (ui.tab === 'cal') { $('#main').innerHTML = calendarHtml(); return; }
