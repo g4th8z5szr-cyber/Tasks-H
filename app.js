@@ -307,7 +307,7 @@ function render() {
   const showRest = ui.tab !== 'cal' && ui.tab !== 'contacts';
   $('#rest-sw').classList.toggle('hidden', !showRest);
   $('#rest-sw').querySelectorAll('[data-rest]').forEach(b => {
-    if (!b.dataset.logo) { b.dataset.logo = '1'; b.innerHTML = `<img class="rest-logo logo-${b.dataset.rest}" src="${REST_LOGO[b.dataset.rest]}" alt=""><span>${esc(restName(b.dataset.rest))}</span>`; }
+    if (!b.dataset.logo) { b.dataset.logo = '1'; b.innerHTML = `<span>${esc(restName(b.dataset.rest))}</span><img class="rest-logo logo-${b.dataset.rest}" src="${REST_LOGO[b.dataset.rest]}" alt="">`; }
     b.classList.toggle('on', b.dataset.rest === ui.rest);
   });
   $('#depts').classList.toggle('hidden', ui.tab === 'cal');
