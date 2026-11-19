@@ -1,10 +1,13 @@
 // שומר את קבצי האפליקציה בטלפון כדי שתעבוד בלי אינטרנט.
 // לא שולח ולא מקבל שום נתון חיצוני.
-const VERSION = 'tk-v30';
+const VERSION = 'tk-v31';
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'manifest.webmanifest', 'icon-180.png', 'icon-512.png', 'bg-ramah.png', 'bg-lili.png'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES.map(f => new Request(f, { cache: 'reload' })))).then(() => self.skipWaiting()));
+  // כל קובץ נשמר בנפרד – קובץ אחד חסר לא יעצור את העדכון
+  e.waitUntil(caches.open(VERSION)
+    .then(c => Promise.all(FILES.map(f => c.add(new Request(f, { cache: 'reload' })).catch(() => {}))))
+    .then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys()
