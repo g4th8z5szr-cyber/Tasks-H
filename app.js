@@ -933,12 +933,12 @@ function invoicesSheet() {
   const paid = by('paid').filter(t => t.inv.paidAt > Date.now() - 45 * DAY).sort((a, b) => b.inv.paidAt - a.inv.paidAt);
   const paidMonth = by('paid').filter(t => t.inv.paidAt >= monthStart);
   const sum = paidMonth.reduce((a, t) => a + (Number(t.inv.amount) || 0), 0);
-  const NEXT_LBL = { wait: 'התקבלה ✓', got: 'הועברה ✓', sent: 'שולמה ✓' };
+  const NEXT_LBL = { wait: 'סמן שהתקבלה', got: 'סמן שהועברה', sent: 'סמן ששולמה' };
   const row = t => {
     const c = db.contacts.find(x => x.id === t.contactId);
     const since = { wait: t.inv.since, got: t.inv.gotAt, sent: t.inv.sentAt }[t.inv.st] || t.inv.since || Date.now();
     const days = Math.floor((Date.now() - since) / DAY);
-    const next = INV_NEXT[t.inv.st] ? `<button class="act ${t.inv.st === 'sent' ? 'ok' : ''}" data-invnext="${t.id}">${NEXT_LBL[t.inv.st]}</button>` : '';
+    const next = INV_NEXT[t.inv.st] ? `<button class="act act-next" data-invnext="${t.id}">${NEXT_LBL[t.inv.st]} ←</button>` : '';
     return `<div class="card" data-invopen="${t.id}"><div class="body"><div class="t">${esc(t.title)}</div>
       <div class="meta"><span class="tag rest-tag">${esc(restName(t.rest))}</span>${c ? `<span class="tag">👷 ${esc(c.name)}</span>` : ''}
       ${t.inv.amount ? `<span class="tag">${fmtMoney(t.inv.amount)}</span>` : ''}${t.inv.num ? `<span class="tag">#${esc(t.inv.num)}</span>` : ''}

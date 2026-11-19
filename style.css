@@ -298,3 +298,5 @@ body { background: transparent; }
   background-position: center 58%; background-size: min(72vw, 420px) auto; opacity: .12; }
 @media (prefers-color-scheme: dark) { #bgimg { filter: invert(1) hue-rotate(180deg); opacity: .16; } }
 .top { background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+
+.act.act-next { background: transparent; border: 1.5px solid var(--accent); font-size: 13px; padding: 7px 9px; }
