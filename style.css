@@ -266,3 +266,6 @@ select.field { -webkit-appearance: none; appearance: none; flex: 1; min-width: 0
 .ld-high { background: var(--p1); }
 .chip.on .ld { box-shadow: 0 0 0 1.5px #fff; }
 .fire { font-size: 13px; margin-inline-start: -2px; }
+
+.photos.small .ph { width: 56px; height: 56px; border-radius: 9px; }
+.photos.small { margin-top: 6px; }

@@ -396,7 +396,7 @@ function cardHtml(it) {
       <div class="meta">${ui.dept === 'all' && ui.tab === 'closed' && t.dept ? `<span class="tag">${esc(t.dept)}</span>` : ''}
         ${prioTag(t)}<span class="tag">${esc(typeName(t.type))}</span>
         ${t.repeats ? `<span class="tag rep">↻ חוזרת ×${t.repeats + 1}</span>` : ''}
-        ${t.photos && t.photos.length ? `<span class="tag">📷 ${t.photos.length}</span>` : ''}
+        ${(t.photos || []).length + (t.closePhotos || []).length ? `<span class="tag">📷 ${(t.photos || []).length + (t.closePhotos || []).length}</span>` : ''}
         ${t.contactId && contactName(t.contactId) ? `<span class="tag">👷 ${esc(contactName(t.contactId))}</span>` : ''}
         ${(() => { const ds = dueState(t); return ds ? `<span class="tag ${ds.cls}">${ds.txt}</span>` : ''; })()}
         <span>${when}</span></div>
@@ -415,7 +415,7 @@ function openSheet(html, tall) {
 function closeSheet() {
   const back = returnTo; returnTo = null;
   if (back) setTimeout(back, 0);
-  if (sheetState && sheetState.kind === 'quick' && !sheetState.saved && sheetState.photos) sheetState.photos.forEach(id => photoDel(id));
+  if (sheetState && (sheetState.kind === 'quick' || sheetState.kind === 'close') && !sheetState.saved && sheetState.photos) sheetState.photos.forEach(id => photoDel(id));
   $('#sheet').classList.add('hidden'); $('#sheet-bg').classList.add('hidden'); $('#sheet').innerHTML = '';
   sheetState = null;
 }
@@ -548,6 +548,7 @@ function quickRefresh() {
   $('#q-type').innerHTML = pickChips('type', TYPES, s.type, s.manual.type ? null : g.type);
   $('#q-prio').innerHTML = pickChips('prio', PRIOS, s.prio, !s.manual.prio && (g.prio === 1 || sim.length) ? s.prio : null);
   $('#q-rep').innerHTML = repeatBox(sim);
+  fillPhotos($('#q-rep'));
   if (!s.manual.contact) {
     const sug = suggestContact(text, s.type, s.dept, sim);
     s.contactId = sug ? sug.c.id : null;
@@ -594,7 +595,7 @@ function repeatBox(sim) {
   const n90 = sim.filter(t => t.createdAt > Date.now() - 90 * DAY).length;
   return `<div class="repeat"><b>↻ נראה כמו תקלה חוזרת</b>
     הופיעה ${sim.length} ${sim.length === 1 ? 'פעם' : 'פעמים'} בעבר${n90 ? ` (${n90} ב־90 הימים האחרונים)` : ''}. פעם אחרונה: ${ago(sim[0].createdAt)} – "${esc(sim[0].title)}"
-    ${last ? `<div class="prev"><b>הטיפול בפעם הקודמת (${fmtD.format(last.closedAt)}):</b>${esc(last.treatment)}${last.contactId ? contactLine(last.contactId, '👷 טיפל:') : ''}</div>`
+    ${last ? `<div class="prev"><b>הטיפול בפעם הקודמת (${fmtD.format(last.closedAt)}):</b>${esc(last.treatment)}${last.contactId ? contactLine(last.contactId, '👷 טיפל:') : ''}${last.closePhotos && last.closePhotos.length ? thumbs(last.closePhotos, true) : ''}</div>`
            : '<div class="prev">עדיין לא נרשם טיפול לתקלה הזו.</div>'}
   </div>`;
 }
@@ -643,6 +644,7 @@ function taskDetail(id) {
     <label>👷 טכנאי / ספק</label>
     <div class="row mt0 center">${contactSelect('d-contact', t.contactId)}${(() => { const c = db.contacts.find(x => x.id === t.contactId); return callBtn(c, true); })()}</div>
     <label>📷 תמונות</label>${photoStrip(t.photos)}
+    ${t.closePhotos && t.closePhotos.length ? `<label>📷 תמונות מהטיפול</label>${thumbs(t.closePhotos)}` : ''}
     <label>📝 תיאור / הערות</label><textarea id="d-notes" placeholder="תיאור התקלה, מספר דגם, מספר קריאה...">${esc(t.notes || '')}</textarea>
     ${t.status === 'closed' ? `<label>איך טופל</label><textarea id="d-treat">${esc(t.treatment || '')}</textarea>` : ''}
     <label>עדכון מהלך הטיפול</label>
@@ -675,12 +677,13 @@ function addLog(t, text) { (t.log = t.log || []).push({ t: Date.now(), text }); 
 function closeFlow(id) {
   const t = db.tasks.find(x => x.id === id); if (!t) return;
   const prev = lastTreated(findSimilar(t.title, t.dept, t.id, t.rest));
-  sheetState = { kind: 'close', id };
+  sheetState = { kind: 'close', id, photos: [] };
   openSheet(`<h2>סגירה: ${esc(t.title)}</h2>
     <label>מה עשית / איך טופל? (יוצג בפעם הבאה שהתקלה תחזור)</label>
     <textarea id="c-treat" placeholder="למשל: הוחלף מאוורר במדחס, טכנאי משה 050-...">${esc(t.treatment || '')}</textarea>
     <label>👷 מי טיפל? (לא חובה)</label>${contactSelect('c-contact', t.contactId || (prev && prev.contactId) || null)}
     ${prev ? `<button class="btn small mt8" data-x="c-prev">כמו בפעם הקודמת: ${esc(prev.treatment.slice(0, 40))}${prev.treatment.length > 40 ? '…' : ''}</button>` : ''}
+    <label>📷 תמונה של הטיפול (לא חובה)</label>${photoStrip([])}
     <div class="row"><button class="btn" data-x="cancel">ביטול</button><button class="btn ok" data-x="c-save">סגור משימה</button></div>`);
   sheetState.prev = prev ? prev.treatment : '';
   $('#c-treat').focus();
@@ -738,7 +741,7 @@ function settings() {
 async function doExport() {
   toast('מכין גיבוי...');
   const photos = {};
-  const ids = new Set(db.tasks.flatMap(t => t.photos || []));
+  const ids = new Set(db.tasks.flatMap(t => (t.photos || []).concat(t.closePhotos || [])));
   for (const id of ids) {
     const b = await photoGet(id).catch(() => null); if (!b) continue;
     photos[id] = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(b); });
@@ -816,6 +819,9 @@ async function compressImage(file) {
     return await new Promise(res => c.toBlob(res, 'image/jpeg', 0.72));
   } finally { URL.revokeObjectURL(url); }
 }
+function thumbs(ids, small) {
+  return `<div class="photos ${small ? 'small' : ''}">${ids.map(id => `<div class="ph"><img data-ph="${id}" alt="תמונה"></div>`).join('')}</div>`;
+}
 function photoStrip(ids) {
   return `<div class="photos" id="ph-strip">${(ids || []).map(id => `<div class="ph"><img data-ph="${id}" alt="תמונה"><button class="ph-del" data-phdel="${id}" aria-label="מחיקת תמונה">✕</button></div>`).join('')}
     <button class="ph-add" data-x="ph-add">📷<span>הוספת תמונה</span></button></div>
@@ -829,7 +835,7 @@ async function fillPhotos(root) {
 }
 function currentPhotoList() {
   if (!sheetState) return null;
-  if (sheetState.kind === 'quick') return sheetState.photos;
+  if (sheetState.kind === 'quick' || sheetState.kind === 'close') return sheetState.photos;
   if (sheetState.kind === 'detail') { const t = db.tasks.find(x => x.id === sheetState.id); return t ? (t.photos = t.photos || []) : null; }
   return null;
 }
@@ -1343,12 +1349,13 @@ document.addEventListener('click', e => {
       detailCollect(t); addLog(t, v); save(); taskDetail(t.id); return;
     }
     case 'del':
-      if (confirm('למחוק את המשימה?')) { (t.photos || []).forEach(id => photoDel(id)); db.tasks = db.tasks.filter(y => y.id !== t.id); save(); closeSheet(); render(); }
+      if (confirm('למחוק את המשימה?')) { (t.photos || []).concat(t.closePhotos || []).forEach(id => photoDel(id)); db.tasks = db.tasks.filter(y => y.id !== t.id); save(); closeSheet(); render(); }
       return;
     case 'c-prev': $('#c-treat').value = s.prev; return;
     case 'c-save': {
       const tr = $('#c-treat').value.trim();
       if ($('#c-contact')) t.contactId = $('#c-contact').value || null;
+      if (s.photos && s.photos.length) { t.closePhotos = (t.closePhotos || []).concat(s.photos); s.saved = true; }
       t.treatment = tr; t.status = 'closed'; t.closedAt = Date.now(); addLog(t, 'נסגר' + (tr ? ': ' + tr : ''));
       save(); closeSheet(); render(); return toast('נסגר ✓');
     }
