@@ -847,8 +847,7 @@ function thumbs(ids, small) {
 }
 function photoStrip(ids) {
   return `<div class="photos" id="ph-strip">${(ids || []).map(id => `<div class="ph"><img data-ph="${id}" alt="תמונה"><button class="ph-del" data-phdel="${id}" aria-label="מחיקת תמונה">✕</button></div>`).join('')}
-    <label class="ph-add">🖼️<span>מהגלריה</span><input class="ph-input" type="file" accept="image/*" multiple></label>
-    <label class="ph-add">📷<span>צילום</span><input class="ph-input" type="file" accept="image/*" capture="environment"></label></div>`;
+    <label class="ph-add">📷<span>הוספת תמונה</span><input class="ph-input" type="file" accept="image/*" multiple></label></div>`;
 }
 async function fillPhotos(root) {
   for (const img of (root || document).querySelectorAll('img[data-ph]')) {
