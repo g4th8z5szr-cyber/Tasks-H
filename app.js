@@ -642,14 +642,14 @@ function taskDetail(id) {
   sheetState = { kind: 'detail', id, rest: t.rest || 'ramah', dept: t.dept, type: t.type, prio: t.prio };
   const rel = findSimilar(t.title, t.dept, t.id, t.rest);
   let actions = '';
-  if (t.status === 'open') actions = `<button class="btn primary" data-x="start">בטיפול</button><button class="btn ok" data-x="close">סגור</button>`;
-  else if (t.status === 'progress') actions = `<button class="btn ok" data-x="close">סגור</button>`;
-  else actions = `<button class="btn" data-x="reopen">פתח מחדש</button>`;
+  const doneLbl = t.type === 'task' ? '✓ סיום משימה' : '✓ סיום טיפול – סגירת התקלה';
+  if (t.status === 'open') actions = `<button class="btn primary full" data-x="start">◐ העברה לטיפול</button><button class="btn ok full big" data-x="close">${doneLbl}</button>`;
+  else if (t.status === 'progress') actions = `<button class="btn ok full big" data-x="close">${doneLbl}</button>`;
+  else actions = `<button class="btn full" data-x="reopen">↺ פתיחה מחדש</button>`;
 
   openSheet(`<h2>פרטי ${t.type === 'task' ? 'משימה' : 'תקלה'}</h2>
     <input id="d-title" class="field" value="${esc(t.title)}">
     ${t.status !== 'closed' ? repeatBox(rel) : ''}
-    <div class="row">${actions}</div>
     <label>מסעדה</label>${pickChips('rest', RESTS.map(r => ({ v: r.id, name: r.name })), sheetState.rest)}
     <label>מחלקה</label><div id="pick-dept">${pickChips('dept', deptsOf(sheetState.rest), t.dept)}</div>
     <label>סוג</label>${pickChips('type', TYPES, t.type)}
@@ -668,7 +668,8 @@ function taskDetail(id) {
     <div class="hist">${(t.log || []).slice().reverse().map(l => `<div class="h"><small>${fmtDT.format(l.t)}</small>${esc(l.text)}</div>`).join('')}
       <div class="h"><small>${fmtDT.format(t.createdAt)}</small>נפתח</div></div>
     ${rel.length ? `<label>היסטוריה של תקלות דומות</label><div class="hist">${rel.map(r => `<div class="h"><small>${fmtD.format(r.createdAt)} · ${r.status === 'closed' ? 'נסגר' : r.status === 'progress' ? 'בטיפול' : 'פתוח'}</small>${esc(r.title)}${r.treatment ? `<br><b>טיפול:</b> ${esc(r.treatment)}` : ''}</div>`).join('')}</div>` : ''}
-    <div class="row"><button class="btn danger" data-x="del">מחק</button><button class="btn primary" data-x="d-save">שמור שינויים</button></div>`);
+    <div class="row"><button class="btn danger" data-x="del">מחק</button><button class="btn primary" data-x="d-save">שמור שינויים</button></div>
+    <div class="final-actions">${actions}</div>`);
   fillPhotos($('#sheet'));
 }
 function detailCollect(t) {

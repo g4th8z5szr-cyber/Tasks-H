@@ -312,3 +312,7 @@ main { position: relative; z-index: 1; }
 .rest-logo { height: 14px; width: auto; display: block; opacity: .55; }
 .rest-sw .seg-b.on .rest-logo { opacity: 1; }
 @media (prefers-color-scheme: dark) { .logo-lili { filter: invert(1); } }
+
+/* כפתורי סיום בתחתית פרטי התקלה */
+.final-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.btn.big { padding: 16px; font-size: 17px; }
