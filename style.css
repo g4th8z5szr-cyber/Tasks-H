@@ -326,3 +326,123 @@ main { position: relative; z-index: 1; }
 .tag.visit { background: #efe7ff; color: #6d28d9; font-weight: 700; }
 @media (prefers-color-scheme: dark) { .tag.visit { background: #2a1f45; color: #c4a8ff; } }
 .d-visit { background: #7c3aed; }
+
+/* =========================================================
+   עיצוב חדש: מסך בית עם "פס" כמו במטבח, אריחי מחלקות, כרטיסים נקיים
+   ========================================================= */
+:root {
+  --bg: #eef1f4; --card: #ffffff; --text: #15191e; --muted: #69727d; --line: #dce1e6;
+  --accent: #1f6fb2; --accent-soft: #e3eef8; --chip: #e6eaee; --sheet: #ffffff;
+  --p1: #e5484d; --p2: #f08c00; --p3: #1f6fb2; --p4: #8a939d; --ok: #2f9e66;
+  --steel-1: #f3f5f7; --steel-2: #a9b1ba; --steel-3: #d9dee3;
+  --paper: #ffffff; --ink: #1b1f24;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117; --card: #161b22; --text: #e9edf1; --muted: #8b95a1; --line: #262d36;
+    --accent: #4c9be0; --accent-soft: #16283b; --chip: #1f252d; --sheet: #161b22;
+    --p1: #f2555a; --p2: #f5a524; --p3: #4c9be0; --p4: #8b95a1; --ok: #3fb37a;
+    --steel-1: #59616b; --steel-2: #2b3138; --steel-3: #474f58;
+  }
+}
+h1 { font-size: 28px; font-weight: 800; letter-spacing: -.5px; }
+.top { border-bottom: 0; }
+.fab { background: var(--accent); box-shadow: 0 8px 22px color-mix(in srgb, var(--accent) 45%, transparent); }
+
+/* סטטוס בתוך "משימות" */
+.status-sw { margin: 0 0 8px; }
+.status-sw .seg-b { font-size: 15px; padding: 9px 4px; }
+.status-sw .seg-b.on { background: var(--card); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,.12); }
+.sn { display: inline-block; min-width: 20px; padding: 0 6px; border-radius: 10px; background: var(--chip); font-size: 12px; line-height: 20px; margin-inline-start: 4px; color: var(--muted); }
+.seg-b.on .sn { background: var(--accent-soft); color: var(--accent); }
+
+/* כרטיס משימה */
+.card { border: 0; border-radius: 18px; padding: 12px 12px; gap: 12px; align-items: center;
+  box-shadow: 0 1px 0 var(--line), 0 6px 16px -10px rgba(16,24,40,.25); }
+.ticon { width: 42px; height: 42px; flex: none; border-radius: 14px; display: grid; place-items: center; font-size: 21px;
+  background: var(--chip); align-self: flex-start; }
+.ticon.p1 { background: color-mix(in srgb, var(--p1) 16%, var(--card)); box-shadow: inset 0 0 0 2px var(--p1); }
+.ticon.p2 { background: color-mix(in srgb, var(--p2) 16%, var(--card)); box-shadow: inset 0 0 0 2px var(--p2); }
+.card .t { font-size: 16px; }
+.card .meta { margin-top: 6px; }
+.card .act { border-radius: 12px; }
+.group-h { font-size: 14px; color: var(--text); margin: 18px 4px 8px; }
+
+/* מסך הבית */
+.home { padding: 2px 2px 20px; }
+.hm-date { margin: 2px 2px 0; color: var(--muted); font-size: 14px; }
+.hm-sum { margin: 4px 2px 0; font-size: 18px; font-weight: 600; line-height: 1.4; }
+.hm-h { font-size: 17px; font-weight: 800; margin: 24px 2px 10px; letter-spacing: -.2px; }
+
+/* הפס – כמו פס ההזמנות במטבח */
+.rail-wrap { margin: 18px -12px 0; position: relative; }
+.rail-head { display: flex; align-items: baseline; justify-content: space-between; padding: 0 14px; }
+.rail-head h2 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -.4px; }
+.rail-head span { color: var(--p1); font-weight: 700; font-size: 14px; }
+.rail-bar { height: 12px; margin: 10px 8px 0; border-radius: 6px;
+  background: linear-gradient(180deg, var(--steel-1) 0%, var(--steel-3) 45%, var(--steel-2) 100%);
+  box-shadow: 0 2px 4px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.6); position: relative; z-index: 2; }
+.rail { display: flex; gap: 12px; overflow-x: auto; padding: 0 14px 14px; margin-top: -6px; scroll-snap-type: x mandatory;
+  scroll-padding: 0 14px; scrollbar-width: none; }
+.rail::-webkit-scrollbar { display: none; }
+.ticket { flex: 0 0 min(62%, 240px); scroll-snap-align: start; position: relative; text-align: right;
+  background: var(--paper); color: var(--ink); padding: 18px 14px 22px; display: flex; flex-direction: column; gap: 8px; min-height: 150px;
+  -webkit-mask: linear-gradient(#000 0 0) top / 100% calc(100% - 9px) no-repeat,
+    conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom / 18px 9px repeat-x;
+          mask: linear-gradient(#000 0 0) top / 100% calc(100% - 9px) no-repeat,
+    conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom / 18px 9px repeat-x;
+  filter: drop-shadow(0 6px 10px rgba(16,24,40,.18)); }
+.ticket::before { content: ''; position: absolute; top: 0; left: 50%; width: 34px; height: 10px; margin-left: -17px;
+  background: linear-gradient(180deg, #8d96a0, #c8ced4); border-radius: 0 0 4px 4px; }
+.tk-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 12px; }
+.tk-flag { font-weight: 800; padding: 2px 8px; border-radius: 6px; color: #fff; }
+.tk-flag.hot { background: #e5484d; } .tk-flag.late { background: #f08c00; }
+.tk-dept { color: #5d6670; font-weight: 600; white-space: nowrap; }
+.tk-title { font-size: 17px; font-weight: 800; line-height: 1.3; letter-spacing: -.2px;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.tk-foot { margin-top: auto; display: flex; justify-content: space-between; align-items: center; color: #5d6670; font-size: 13px;
+  border-top: 1.5px dashed #c9cfd5; padding-top: 8px; }
+.rail-empty { margin: 4px 14px 0; padding: 18px 14px; border-radius: 14px; background: var(--card); color: var(--muted); font-size: 15px; }
+
+/* אריחי מחלקות */
+.dgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dtile { background: var(--card); border-radius: 18px; padding: 14px; display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto;
+  column-gap: 10px; align-items: center; text-align: right; box-shadow: 0 1px 0 var(--line), 0 6px 16px -12px rgba(16,24,40,.3); position: relative; overflow: hidden; }
+.dtile::after { content: ''; position: absolute; inset: auto 0 0 0; height: 4px; background: transparent; }
+.dtile.ld-low::after { background: var(--ok); } .dtile.ld-mid::after { background: var(--p2); } .dtile.ld-high::after { background: var(--p1); }
+.dt-ic { grid-row: 1 / 3; font-size: 30px; line-height: 1; }
+.dt-name { font-size: 15px; font-weight: 700; color: var(--muted); }
+.dt-n { font-size: 30px; font-weight: 800; line-height: 1.05; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
+.dtile.ld-low .dt-n { color: var(--ok); } .dtile.ld-mid .dt-n { color: var(--p2); } .dtile.ld-high .dt-n { color: var(--p1); }
+.dtile.empty .dt-n { color: var(--line); font-size: 24px; }
+.dt-fire { font-size: 18px; margin-inline-start: 4px; }
+
+/* היום */
+.today { background: var(--card); border-radius: 18px; overflow: hidden; box-shadow: 0 1px 0 var(--line); }
+.trow { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; text-align: right; border-bottom: 1px solid var(--line); }
+.trow:last-child { border-bottom: 0; }
+.tr-ic { width: 34px; height: 34px; border-radius: 10px; background: var(--chip); display: grid; place-items: center; font-size: 17px; flex: none; }
+.tr-body { display: flex; flex-direction: column; min-width: 0; }
+.tr-body b { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tr-body small { color: var(--muted); font-size: 13px; }
+.trow.late small { color: var(--p1); font-weight: 700; }
+
+/* כפתורים מהירים */
+.qrow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 24px; }
+.qtile { position: relative; background: var(--card); border-radius: 16px; padding: 12px 4px 10px; display: flex; flex-direction: column;
+  align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--muted); box-shadow: 0 1px 0 var(--line); }
+.qtile span { font-size: 24px; }
+.qtile .badge { top: 6px; right: 8px; }
+
+/* סרגל תחתון */
+.tabs .tab-ic { font-size: 20px; line-height: 22px; }
+@media (prefers-reduced-motion: no-preference) {
+  .rail.anim .ticket { animation: hang .5s cubic-bezier(.2,.8,.3,1.2) both; transform-origin: 50% 0; }
+  .rail.anim .ticket:nth-child(2) { animation-delay: .06s; } .rail.anim .ticket:nth-child(3) { animation-delay: .12s; } .rail.anim .ticket:nth-child(4) { animation-delay: .18s; }
+  @keyframes hang { from { transform: rotate(-4deg) translateY(-8px); opacity: 0; } to { transform: none; opacity: 1; } }
+}
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* מחוץ למסך הבית המתג קומפקטי – בלי לוגו, כדי לחסוך מקום */
+body:not([data-view=home]) .rest-logo { display: none; }
+body:not([data-view=home]) .rest-sw .seg-b { padding: 7px 4px; }

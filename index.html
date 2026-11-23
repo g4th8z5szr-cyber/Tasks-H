@@ -21,16 +21,17 @@
   <div class="top-row">
     <h1 id="title">משימות פתוחות</h1>
     <div class="top-actions">
-      <button id="btnInv" class="icon-btn" aria-label="חשבוניות">🧾</button>
-      <button id="btnAll" class="icon-btn" aria-label="כל המשימות הפתוחות">📋</button>
-      <button id="btnContacts" class="icon-btn" aria-label="טכנאים וספקים">📇</button>
-      <button id="btnStats" class="icon-btn" aria-label="סיכום חודשי">📊</button>
       <button id="btnSettings" class="icon-btn" aria-label="הגדרות">⚙︎</button>
     </div>
   </div>
   <div id="rest-sw" class="seg rest-sw" role="tablist">
     <button class="seg-b" data-rest="ramah">רמה״ח</button>
     <button class="seg-b" data-rest="lili">לילי</button>
+  </div>
+  <div id="status-sw" class="seg status-sw hidden">
+    <button class="seg-b" data-status="open">פתוחות</button>
+    <button class="seg-b" data-status="progress">בטיפול</button>
+    <button class="seg-b" data-status="closed">סגורות</button>
   </div>
   <div id="search-wrap" class="search-wrap hidden">
     <input id="search" type="search" placeholder="חיפוש..." autocomplete="off">
@@ -43,11 +44,10 @@
 <button id="fab" class="fab" aria-label="הוספה מהירה">+</button>
 
 <nav class="tabs">
-  <button data-tab="open" class="active"><span class="tab-ic">●</span><span>פתוחות</span><b class="badge" id="b-open"></b></button>
-  <button data-tab="progress"><span class="tab-ic">◐</span><span>בטיפול</span><b class="badge" id="b-progress"></b></button>
-  <button data-tab="closed"><span class="tab-ic">✓</span><span>סגורות</span></button>
-  <button data-tab="routine"><span class="tab-ic">↻</span><span>שוטף</span><b class="badge" id="b-routine"></b></button>
+  <button data-tab="home" class="active"><span class="tab-ic">⌂</span><span>בית</span></button>
+  <button data-tab="tasks"><span class="tab-ic">☰</span><span>משימות</span><b class="badge" id="b-open"></b></button>
   <button data-tab="cal"><span class="tab-ic cal-ic" aria-hidden="true"><i></i><b id="cal-day"></b></span><span>יומן</span><b class="badge" id="b-cal"></b></button>
+  <button data-tab="routine"><span class="tab-ic">↻</span><span>שוטף</span><b class="badge" id="b-routine"></b></button>
 </nav>
 
 <div id="sheet-bg" class="sheet-bg hidden"></div>

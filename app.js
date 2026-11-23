@@ -14,6 +14,8 @@ const DEPTS = RESTS[0].depts.slice(); // כל המחלקות (לאנשי קשר)
 const REST_KW = { lili: ['לילי', 'לילינבלום'], ramah: ['רמהח', 'רמה״ח', 'רמה"ח'] };
 // לוגו קטן לכל מסעדה (מוטמע בקוד, בלי קבצים נוספים)
 const REST_LOGO = { ramah: 'data:image/png;base64,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', lili: 'data:image/png;base64,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' };
+const TYPE_ICON = { equip: '🔧', plumb: '🚰', elec: '⚡', build: '🧱', it: '💻', task: '📝' };
+const DEPT_ICON = { 'פלור': '🍽️', 'מטבח': '🍳', 'בר': '🍸', 'הכנות': '🔪', 'קצביה': '🥩', 'משרד': '💼', 'כללי': '📦' };
 function deptsOf(rest) { return (RESTS.find(r => r.id === rest) || RESTS[0]).depts; }
 function restName(id) { return (RESTS.find(r => r.id === id) || RESTS[0]).name; }
 const DEFAULT_DEPT = 'כללי'; // לאן הולך כל מה שלא זוהתה לו מחלקה
@@ -262,7 +264,8 @@ function toast(msg) {
 }
 
 /* ---------- מצב ממשק ---------- */
-const ui = { tab: 'open', dept: 'all', q: '', calMonth: null, calDay: null, rest: 'ramah' };
+const ui = { tab: 'home', lastTask: 'open', dept: 'all', q: '', calMonth: null, calDay: null, rest: 'ramah' };
+const TASK_TABS = ['open', 'progress', 'closed'];
 try { const r = localStorage.getItem('tk.rest'); if (RESTS.some(x => x.id === r)) ui.rest = r; } catch (e) { /* */ }
 function setRest(id) {
   ui.rest = id; try { localStorage.setItem('tk.rest', id); } catch (e) { /* */ }
@@ -270,7 +273,7 @@ function setRest(id) {
 }
 if (ui.tab === 'contacts') ui.tab = 'open';
 const inRest = x => (x.rest || 'ramah') === ui.rest;
-const TITLES = { open: 'משימות פתוחות', progress: 'משימות בטיפול', closed: 'משימות סגורות', routine: 'טיפול שוטף', cal: 'יומן', contacts: 'טכנאים וספקים' };
+const TITLES = { home: '', open: 'משימות פתוחות', progress: 'משימות בטיפול', closed: 'משימות סגורות', routine: 'טיפול שוטף', cal: 'יומן', contacts: 'טכנאים וספקים' };
 
 function taskSort(a, b) {
   if (a.prio !== b.prio) return a.prio - b.prio;
@@ -299,8 +302,20 @@ function urgencyScore(t) {
 /* ---------- רינדור ---------- */
 function render() {
   { const old = $('#bgimg'); if (old) old.remove(); } // הרקע הוסר
-  $('#title').textContent = TITLES[ui.tab];
-  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === ui.tab));
+  const isTasks = TASK_TABS.includes(ui.tab);
+  if (isTasks) ui.lastTask = ui.tab;
+  document.body.dataset.view = ui.tab === 'home' ? 'home' : isTasks ? 'tasks' : ui.tab;
+  $('#title').textContent = ui.tab === 'home' ? greeting() : isTasks ? 'משימות' : TITLES[ui.tab];
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === ui.tab || (b.dataset.tab === 'tasks' && isTasks)));
+  { const ss = $('#status-sw'); if (ss) {
+    ss.classList.toggle('hidden', !isTasks);
+    const cnt = st => db.tasks.filter(t => inRest(t) && t.status === st).length;
+    ss.querySelectorAll('[data-status]').forEach(b => {
+      const st = b.dataset.status, n = st === 'closed' ? '' : cnt(st);
+      b.classList.toggle('on', st === ui.tab);
+      b.innerHTML = `${{ open: 'פתוחות', progress: 'בטיפול', closed: 'סגורות' }[st]}${n ? ` <span class="sn">${n}</span>` : ''}`;
+    });
+  } }
   $('#search-wrap').classList.toggle('hidden', ui.tab !== 'closed' && ui.tab !== 'contacts');
   $('#search').placeholder = ui.tab === 'contacts' ? 'חיפוש לפי שם, תפקיד או טלפון...' : 'חיפוש...';
 
@@ -310,7 +325,7 @@ function render() {
     if (!b.dataset.logo) { b.dataset.logo = '1'; b.innerHTML = `<span>${esc(restName(b.dataset.rest))}</span><img class="rest-logo logo-${b.dataset.rest}" src="${REST_LOGO[b.dataset.rest]}" alt="">`; }
     b.classList.toggle('on', b.dataset.rest === ui.rest);
   });
-  $('#depts').classList.toggle('hidden', ui.tab === 'cal');
+  $('#depts').classList.toggle('hidden', ui.tab === 'cal' || ui.tab === 'home');
 
   if (ui.tab !== 'contacts' && ui.dept !== 'all' && !deptsOf(ui.rest).includes(ui.dept)) ui.dept = 'all';
   const items = currentItems(false);
@@ -325,8 +340,8 @@ function render() {
   $('#depts').innerHTML = chips;
 
   // תגים בלשוניות
-  $('#b-open').textContent = db.tasks.filter(t => inRest(t) && t.status !== 'closed').length || '';
-  $('#b-progress').textContent = db.tasks.filter(t => inRest(t) && t.status === 'progress').length || '';
+  { const bo = $('#b-open'); if (bo) bo.textContent = db.tasks.filter(t => inRest(t) && t.status !== 'closed').length || ''; }
+  { const bp = $('#b-progress'); if (bp) bp.textContent = db.tasks.filter(t => inRest(t) && t.status === 'progress').length || ''; }
   { const ib = $('#btnInv'); if (ib) ib.classList.toggle('dot-on', invoicesPending() > 0); }
   { // אייקון היומן: התאריך של היום + מספר המשימות הדחופות
     const cd = $('#cal-day'), bc = $('#b-cal');
@@ -336,6 +351,7 @@ function render() {
   }
   $('#b-routine').textContent = db.routine.filter(r => inRest(r) && routineState(r).days <= 0).length || '';
 
+  if (ui.tab === 'home') { $('#main').innerHTML = homeHtml(); return; }
   if (ui.tab === 'cal') { $('#main').innerHTML = calendarHtml(); return; }
   if (ui.tab === 'contacts') { $('#main').innerHTML = contactsView(); return; }
   const list = currentItems(true);
@@ -359,6 +375,8 @@ function currentItems(applyFilter) {
     list = db.routine.filter(inRest).sort((a, b) => routineDue(a) - routineDue(b));
   } else if (ui.tab === 'contacts') {
     list = contactsFiltered();
+  } else if (ui.tab === 'home') {
+    list = [];
   } else if (ui.tab === 'cal') {
     list = db.tasks.filter(t => t.status !== 'closed' && t.due).concat(db.routine);
   } else {
@@ -405,10 +423,10 @@ function cardHtml(it) {
   const when = t.status === 'closed' ? `נסגר ${ago(t.closedAt)}` : ago(t.createdAt);
   const progInOpen = ui.tab === 'open' && t.status === 'progress';
   return `<div class="card ${progInOpen ? 'is-prog' : ''}" data-open="${t.id}">
-    <div class="bar pr${t.prio}"></div>
+    <div class="ticon p${t.prio}" aria-hidden="true">${TYPE_ICON[t.type] || '📝'}</div>
     <div class="body"><div class="t">${esc(t.title)}</div>
       <div class="meta">${ui.dept === 'all' && ui.tab === 'closed' && t.dept ? `<span class="tag">${esc(t.dept)}</span>` : ''}
-        ${progInOpen ? '<span class="tag st-prog">◐ בטיפול</span>' : ''}${prioTag(t)}<span class="tag">${esc(typeName(t.type))}</span>
+        ${progInOpen ? '<span class="tag st-prog">◐ בטיפול</span>' : ''}${prioTag(t)}
         ${t.repeats ? `<span class="tag rep">↻ חוזרת ×${t.repeats + 1}</span>` : ''}
         ${(t.photos || []).length + (t.closePhotos || []).length ? `<span class="tag">📷 ${(t.photos || []).length + (t.closePhotos || []).length}</span>` : ''}
         ${t.contactId && contactName(t.contactId) ? `<span class="tag ${t.visitAt && t.status !== 'closed' ? 'visit' : ''}">👷 ${esc(contactName(t.contactId))}${t.visitAt && t.status !== 'closed' ? ` · ${whenTxt(t.visitAt)}` : ''}</span>` : ''}
@@ -418,6 +436,85 @@ function cardHtml(it) {
       ${t.notes ? `<div class="desc">${esc(t.notes)}</div>` : ''}
       ${t.status === 'closed' && t.treatment ? `<div class="meta">טיפול: ${esc(t.treatment)}</div>` : ''}
     </div>${act}</div>`;
+}
+
+/* ---------- מסך הבית ---------- */
+function greeting() {
+  const h = new Date().getHours();
+  return h < 5 ? 'לילה טוב' : h < 12 ? 'בוקר טוב' : h < 17 ? 'צהריים טובים' : h < 21 ? 'ערב טוב' : 'לילה טוב';
+}
+function ageTxt(ts) {
+  const d = Math.floor((startOfDay(Date.now()) - startOfDay(ts)) / DAY);
+  return d <= 0 ? 'נפתח היום' : d === 1 ? 'נפתח אתמול' : `פתוח ${d} ימים`;
+}
+let railAnimated = false; // אנימציית הכרטיסים רק בפתיחה הראשונה
+function homeHtml() {
+  setTimeout(() => { railAnimated = true; }, 0);
+  const today = startOfDay(Date.now());
+  const live = db.tasks.filter(t => inRest(t) && t.status !== 'closed');
+  const prog = live.filter(t => t.status === 'progress').length;
+  const overdue = t => t.due && startOfDay(t.due) < today;
+  // על הפס: דחופות ובאיחור
+  const rail = live.filter(t => t.prio === 1 || overdue(t))
+    .sort((a, b) => a.prio - b.prio || (a.due || Infinity) - (b.due || Infinity) || a.createdAt - b.createdAt);
+  const dateLine = new Intl.DateTimeFormat('he-IL', { weekday: 'long', day: 'numeric', month: 'long' }).format(Date.now())
+    + (fmtHebDate ? ', ' + fmtHebDate.format(Date.now()) : '');
+  const summary = !live.length ? 'אין משימות פתוחות. הכול בשליטה.'
+    : `${live.length === 1 ? 'משימה אחת פתוחה' : `${live.length} משימות פתוחות`}${prog ? `, ${prog === 1 ? 'אחת' : prog} בטיפול` : ''}.`;
+
+  const tickets = rail.map(t => `
+    <button class="ticket" data-open="${t.id}">
+      <span class="tk-top"><span class="tk-flag ${t.prio === 1 ? 'hot' : 'late'}">${t.prio === 1 ? '🔥 דחופה' : '⏰ באיחור'}</span><span class="tk-dept">${DEPT_ICON[t.dept] || ''} ${esc(t.dept || '')}</span></span>
+      <span class="tk-title">${esc(t.title)}</span>
+      <span class="tk-foot"><span>${t.status === 'progress' ? '◐ בטיפול' : ageTxt(t.createdAt)}</span><span aria-hidden="true">${TYPE_ICON[t.type] || '📝'}</span></span>
+    </button>`).join('');
+
+  const tiles = deptsOf(ui.rest).map(d => {
+    const mine = live.filter(t => t.dept === d);
+    const hot = mine.some(t => t.prio === 1);
+    return `<button class="dtile ${mine.length ? loadCls(mine.length) : 'empty'}" data-gotodept="${esc(d)}">
+      <span class="dt-ic" aria-hidden="true">${DEPT_ICON[d] || '📦'}</span>
+      <span class="dt-name">${esc(d)}</span>
+      <span class="dt-n">${mine.length || '✓'}${hot ? '<span class="dt-fire">🔥</span>' : ''}</span>
+    </button>`;
+  }).join('');
+
+  // היום: ביקורי אנשי מקצוע, יעדים וטיפול שוטף
+  const todayRows = [];
+  for (const t of live) {
+    if (t.visitAt && startOfDay(t.visitAt) === today) todayRows.push({ s: t.visitAt, ic: '👷', txt: `${contactName(t.contactId) || 'איש מקצוע'} מגיע ב־${fmtTime.format(t.visitAt)}`, sub: t.title, attr: `data-open="${t.id}"` });
+    if (t.due && startOfDay(t.due) === today) todayRows.push({ s: today + 1, ic: '📅', txt: t.title, sub: 'יעד להיום', attr: `data-open="${t.id}"` });
+  }
+  for (const r of db.routine.filter(inRest)) {
+    const st = routineState(r);
+    if (st.days <= 0) todayRows.push({ s: today + 2, ic: '↻', txt: r.title, sub: st.txt, attr: `data-open-r="${r.id}"`, late: st.days < 0 });
+  }
+  todayRows.sort((a, b) => a.s - b.s);
+  const inv = invoicesPending();
+
+  return `<section class="home">
+    <p class="hm-date">${dateLine}</p>
+    <p class="hm-sum">${summary}</p>
+
+    <div class="rail-wrap">
+      <div class="rail-head"><h2>על הפס</h2><span>${rail.length ? (rail.length === 1 ? 'דבר אחד בוער' : `${rail.length} דברים בוערים`) : ''}</span></div>
+      <div class="rail-bar" aria-hidden="true"></div>
+      ${rail.length ? `<div class="rail ${railAnimated ? '' : 'anim'}">${tickets}</div>` : `<div class="rail-empty">אין כלום על הפס. אין משימות דחופות או באיחור.</div>`}
+    </div>
+
+    <h2 class="hm-h">מחלקות</h2>
+    <div class="dgrid">${tiles}</div>
+
+    ${todayRows.length ? `<h2 class="hm-h">היום</h2><div class="today">${todayRows.slice(0, 8).map(x => `
+      <button class="trow ${x.late ? 'late' : ''}" ${x.attr}><span class="tr-ic" aria-hidden="true">${x.ic}</span><span class="tr-body"><b>${esc(x.txt)}</b><small>${esc(x.sub)}</small></span></button>`).join('')}</div>` : ''}
+
+    <div class="qrow">
+      <button class="qtile" data-sheet="inv"><span aria-hidden="true">🧾</span>חשבוניות${inv ? `<b class="badge">${inv}</b>` : ''}</button>
+      <button class="qtile" data-sheet="all"><span aria-hidden="true">🗂️</span>שתי המסעדות</button>
+      <button class="qtile" data-sheet="contacts"><span aria-hidden="true">📇</span>אנשי קשר</button>
+      <button class="qtile" data-sheet="stats"><span aria-hidden="true">📊</span>סיכום חודשי</button>
+    </div>
+  </section>`;
 }
 
 /* ---------- גיליונות (חלונות קופצים) ---------- */
@@ -636,7 +733,7 @@ function quickSave() {
   if (t.dept) learnFrom(title, t.dept, t.type);
   if (t.rest !== ui.rest && ui.tab !== 'cal') setRest(t.rest);
   save(); closeSheet();
-  if (ui.tab !== 'open' && ui.tab !== 'cal') ui.tab = 'open';
+  if (ui.tab === 'progress' || ui.tab === 'closed') ui.tab = 'open';
   render(); toast(sim.length ? 'נשמר · סומן כתקלה חוזרת' : 'נשמר');
 }
 
@@ -1436,7 +1533,14 @@ document.addEventListener('click', e => {
     else { ui.calMonth = new Date(m.getFullYear(), m.getMonth() + n, 1).getTime(); ui.calDay = ui.calMonth; }
     return render();
   }
-  if (el.dataset.tab) { if (ui.tab !== el.dataset.tab) { ui.q = ''; $('#search').value = ''; } ui.tab = el.dataset.tab; ui.dept = ui.dept; window.scrollTo(0, 0); return render(); }
+  if (el.dataset.tab) {
+    const to = el.dataset.tab === 'tasks' ? ui.lastTask : el.dataset.tab;
+    if (ui.tab !== to) { ui.q = ''; $('#search').value = ''; }
+    ui.tab = to; window.scrollTo(0, 0); return render();
+  }
+  if (el.dataset.status) { ui.tab = el.dataset.status; ui.q = ''; $('#search').value = ''; window.scrollTo(0, 0); return render(); }
+  if (el.dataset.gotodept) { ui.tab = 'open'; ui.dept = el.dataset.gotodept; window.scrollTo(0, 0); return render(); }
+  if (el.dataset.sheet) { const f = { inv: invoicesSheet, all: overviewSheet, contacts: contactsSheet, stats: () => statsSheet(0) }[el.dataset.sheet]; return f && f(); }
   if (el.dataset.rest && el.closest('#rest-sw')) { setRest(el.dataset.rest); window.scrollTo(0, 0); return render(); }
   if (el.dataset.dept) { ui.dept = el.dataset.dept; return render(); }
 

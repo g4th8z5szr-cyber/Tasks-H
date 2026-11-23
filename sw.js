@@ -1,6 +1,6 @@
 // שומר את קבצי האפליקציה בטלפון כדי שתעבוד בלי אינטרנט.
 // לא שולח ולא מקבל שום נתון חיצוני.
-const VERSION = 'tk-v43';
+const VERSION = 'tk-v44';
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'manifest.webmanifest', 'icon2-180.png', 'icon2-512.png'];
 
 self.addEventListener('install', e => {
